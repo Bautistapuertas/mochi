@@ -243,7 +243,7 @@ export default function Viewer({ id }: { id: string }) {
         )}
       </header>
 
-      <div className="flex-1 min-h-0 overflow-auto relative fade-in" data-scroll {...swipe}>
+      <div className="flex-1 min-h-0 overflow-auto relative fade-in bg-sunken" data-scroll {...swipe}>
         {body}
       </div>
       {/* Celu: aviso de que se puede deslizar */}

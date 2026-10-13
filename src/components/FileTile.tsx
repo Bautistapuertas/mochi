@@ -71,7 +71,7 @@ export default function FileTile({
       >
         <div
           className="relative aspect-[4/3] grid place-items-center overflow-hidden"
-          style={{ background: `color-mix(in srgb, ${s.color} 10%, var(--sunken))` }}
+          style={{ background: `color-mix(in srgb, ${s.color} 6%, var(--sunken))` }}
         >
           {thumbOk ? (
             <img
@@ -134,7 +134,7 @@ export default function FileTile({
 
 function DocGlyph({ color, label }: { color: string; label: string }) {
   return (
-    <svg viewBox="0 0 64 76" className="w-14 h-auto" aria-hidden>
+    <svg viewBox="0 0 64 76" className="w-11 h-auto" aria-hidden>
       <path d="M8 4h34l18 18v46a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4z" fill="var(--surface)" stroke={color} strokeWidth="3" />
       <path d="M42 4v14a4 4 0 0 0 4 4h14" fill="none" stroke={color} strokeWidth="3" />
       <rect x="10" y="40" width="44" height="18" rx="5" fill={color} />

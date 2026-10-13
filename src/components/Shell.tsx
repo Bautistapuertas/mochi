@@ -44,7 +44,6 @@ export default function Shell({ route, children }: { route: Route; children: Rea
         {ITEMS.map((it) => (
           <NavButton key={it.key} item={it} on={active === it.key} dot={it.key === 'fechas' && soon} avatar={it.key === 'yo' ? user?.picture : undefined} />
         ))}
-        <span className="mt-auto text-[10px] text-muted text-center leading-tight px-1">Ctrl+K para buscar</span>
       </nav>
 
       <div key={active} className="fade-in pb-24 md:pb-0">

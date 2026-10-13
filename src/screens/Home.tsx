@@ -284,7 +284,7 @@ function MateriaCard({ m, year }: { m: Materia; year?: Year }) {
       {year && <span className="text-xs font-semibold text-muted mb-1">{year.name}</span>}
       <span className="font-bold leading-snug line-clamp-2">{m.name}</span>
       <span className={`mt-auto pt-2 text-xs font-semibold truncate ${n !== null && n <= 3 ? 'text-accent' : 'text-muted'}`}>
-        {next ? `${next.title} · ${whenLabel(next.date).toLowerCase()}` : m.estado === 'final' ? 'Final pendiente' : ' '}
+        {next ? `${next.title} · ${whenLabel(next.date).toLowerCase()}` : ' '}
       </span>
     </button>
   );
@@ -366,7 +366,7 @@ function Stats() {
   const cursando = ms.filter((m) => m.estado === 'cursando').length;
   const p = promedio(tree);
   const parts = [
-    cursando ? `Cursando ${cursando}` : null,
+    cursando ? `${cursando} cursando` : null,
     aprobadas ? `${aprobadas} ${aprobadas === 1 ? 'aprobada' : 'aprobadas'}` : null,
   ].filter(Boolean);
   if (!parts.length && !p) return null;
@@ -403,7 +403,7 @@ function Approved() {
   return (
     <section className="mt-10">
       <button onClick={toggle} className="flex items-center gap-2 text-lg font-bold" aria-expanded={open}>
-        <span className={`transition ${open ? 'rotate-90' : ''}`}>›</span>
+        <ChevronRight width={20} height={20} className={`transition ${open ? 'rotate-90' : ''}`} />
         Aprobadas
         <span className="text-sm font-semibold text-muted bg-sunken rounded-full px-2 py-0.5">{list.length}</span>
       </button>

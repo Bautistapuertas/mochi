@@ -1,10 +1,11 @@
-import { whereLabel, type FileItem } from '../lib/facu';
-import { baseName, fmtDate, fmtSize } from '../lib/files';
+import type { FileItem } from '../lib/facu';
+import { baseName, fmtDate } from '../lib/files';
 import { openFile } from '../lib/router';
 import { FileBadge } from './ui';
 
 export default function FileRow({ file, showWhere = false }: { file: FileItem; showWhere?: boolean }) {
-  const meta = [showWhere ? whereLabel(file) : null, fmtDate(file.modifiedTime), fmtSize(file.size)]
+  const where = showWhere ? [file.materia.name, file.folder?.name].filter(Boolean).join(' · ') : null;
+  const meta = [where, fmtDate(file.modifiedTime)]
     .filter(Boolean)
     .join(' · ');
   return (
