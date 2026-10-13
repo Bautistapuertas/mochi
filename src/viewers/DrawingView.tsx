@@ -3,6 +3,7 @@ import '@excalidraw/excalidraw/index.css';
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types';
 import { useEffect, useRef, useState } from 'react';
 import { Spinner } from '../components/ui';
+import { isDark } from '../lib/theme';
 
 type Status = 'saved' | 'pending' | 'saving' | 'error';
 
@@ -69,7 +70,7 @@ export default function DrawingView({ blob, onSave }: { blob: Blob; onSave: (jso
       </div>
     );
 
-  const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+  const dark = isDark();
   const label = { saved: 'Guardado', pending: 'Sin guardar…', saving: 'Guardando…', error: 'Error al guardar' }[status];
 
   return (

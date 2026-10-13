@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import FileRow from '../components/FileRow';
-import { Check, Folder as FolderIcon, Plus, SearchIcon, Pencil, Trash } from '../components/icons';
+import { Check, ChevronRight, Folder as FolderIcon, Plus, SearchIcon, Pencil, Trash } from '../components/icons';
 import { UpcomingExams } from '../components/Exams';
-import { fmtNota } from '../lib/datos';
+import { daysUntil, fmtNota, whenLabel } from '../lib/datos';
 import UploadSheet from '../components/UploadSheet';
 import { itemsFromDrop, itemsFromInput, summarize, type UploadItem } from '../lib/upload';
-import UserMenu from '../components/UserMenu';
 import { Button, ConfirmModal, Menu, Modal, PromptModal, Spinner, errorText, useToast } from '../components/ui';
 import { CHANGED, useFacu } from '../lib/context';
 import {
@@ -16,6 +15,9 @@ import {
   nextYearName,
   promedio,
   recentFiles,
+  setEstado,
+  upcomingExams,
+  type Materia,
   renameFolder,
   trashFolder,
   type FileItem,
@@ -31,6 +33,7 @@ export default function Home() {
   const [bulk, setBulk] = useState<{ year: Year; groups: Group[] } | null>(null);
   const [renaming, setRenaming] = useState<Year | null>(null);
   const [deleting, setDeleting] = useState<Year | null>(null);
+  const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [dropYear, setDropYear] = useState<string | null>(null);
 
@@ -49,19 +52,21 @@ export default function Home() {
     return () => removeEventListener(CHANGED, load);
   }, [tree]);
 
+  const all = tree.years.flatMap((y) => y.materias.map((m) => ({ m, y })));
+  const cursando = all.filter((x) => x.m.estado === 'cursando');
+  const finales = all.filter((x) => x.m.estado === 'final');
+  // "Todas las materias" arranca abierta solo si todavía no marcaste qué cursás.
+  const [allOpen, setAllOpen] = usePersisted('mochi:todas', cursando.length === 0);
+
   if (tree.years.length === 0) return <Onboarding />;
 
   const firstName = user?.name.split(' ')[0];
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 pb-16 safe-top">
-      <header className="flex items-center justify-between pt-5 pb-4">
-        <div>
-          <p className="text-muted text-sm font-medium">Hola{firstName ? `, ${firstName}` : ''} 👋</p>
-          <h1 className="text-2xl font-extrabold tracking-tight">Tus materias</h1>
-          <Stats />
-        </div>
-        <UserMenu />
+      <header className="pt-6 pb-5">
+        <h1 className="text-[28px] font-extrabold tracking-tight leading-tight">Hola{firstName ? `, ${firstName}` : ''} 👋</h1>
+        <Stats />
       </header>
 
       <button
@@ -69,86 +74,128 @@ export default function Home() {
         className="w-full flex items-center gap-3 h-12 px-4 rounded-2xl bg-surface border border-line text-muted text-[15px] hover:border-accent transition"
       >
         <SearchIcon />
-        Buscar en todos tus apuntes…
+        <span className="flex-1 text-left">Buscar en todos tus apuntes…</span>
+        <kbd className="hidden md:inline text-xs font-semibold border border-line rounded-md px-1.5 py-0.5">Ctrl K</kbd>
       </button>
 
       <UpcomingExams />
 
-      {tree.years.map((y) => (
-        <section
-          key={y.id}
-          className={`mt-8 rounded-3xl transition ${dropYear === y.id ? 'outline-4 outline-dashed outline-accent outline-offset-8 bg-accent-soft/40' : ''}`}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDropYear(y.id);
-          }}
-          onDragLeave={(e) => {
-            if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropYear(null);
-          }}
-          onDrop={async (e) => {
-            e.preventDefault();
-            setDropYear(null);
-            importGroups(y, await itemsFromDrop(e.dataTransfer));
-          }}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-bold">
-              {y.name}
-              {dropYear === y.id && <span className="text-accent font-semibold text-base"> · Soltá para crear las materias acá</span>}
-            </h2>
-            <Menu
-              label={`Opciones de ${y.name}`}
-              items={[
-                { label: 'Cambiar nombre', icon: <Pencil />, onClick: () => setRenaming(y) },
-                { label: 'Eliminar año', icon: <Trash />, danger: true, onClick: () => setDeleting(y) },
-              ]}
-            />
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {y.materias.filter((m) => !m.aprobada).map((m) => (
-              <button
-                key={m.id}
-                onClick={() => go(`/m/${m.id}`)}
-                className="group relative text-left bg-surface border border-line rounded-2xl p-4 min-h-28 flex flex-col justify-between overflow-hidden hover:-translate-y-0.5 hover:shadow-md transition"
-              >
-                <span className="absolute inset-x-0 top-0 h-1.5" style={{ background: m.color }} />
-                <span
-                  className="size-9 rounded-xl grid place-items-center font-extrabold text-white"
-                  style={{ background: m.color }}
-                >
-                  {m.name.charAt(0).toUpperCase()}
-                </span>
-                <span className="font-semibold leading-snug mt-3 line-clamp-2">{m.name}</span>
-              </button>
-            ))}
-            <button
-              onClick={() => setAdding({ year: y })}
-              className="rounded-2xl border-2 border-dashed border-line min-h-28 flex flex-col items-center justify-center gap-1 text-muted font-semibold hover:border-accent hover:text-accent transition"
-            >
-              <Plus />
-              Agregar materia
+      <section className="mt-9">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-bold">Cursando ahora</h2>
+          {cursando.length > 0 && (
+            <button onClick={() => setPicking(true)} className="text-sm font-semibold text-muted hover:text-ink">
+              Cambiar
             </button>
+          )}
+        </div>
+        {cursando.length ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {cursando.map(({ m, y }) => (
+              <MateriaCard key={m.id} m={m} year={y} />
+            ))}
+          </div>
+        ) : (
+          <button
+            onClick={() => setPicking(true)}
+            className="w-full text-left rounded-3xl border-2 border-dashed border-line p-5 hover:border-accent transition"
+          >
+            <p className="font-bold">¿Qué materias estás cursando?</p>
+            <p className="text-muted text-[15px] mt-1">Elegilas y te aparecen acá arriba, aunque sean de años distintos.</p>
+            <span className="inline-flex items-center gap-1.5 mt-3 text-accent font-semibold">
+              Elegir materias <ChevronRight width={18} height={18} />
+            </span>
+          </button>
+        )}
+      </section>
+
+      {finales.length > 0 && (
+        <section className="mt-9">
+          <h2 className="text-lg font-bold mb-3">Finales pendientes</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {finales.map(({ m, y }) => (
+              <MateriaCard key={m.id} m={m} year={y} />
+            ))}
           </div>
         </section>
-      ))}
+      )}
 
-      <Button
-        className="mt-8"
-        disabled={busy}
-        onClick={async () => {
-          setBusy(true);
-          try {
-            await addYear(tree);
-            await reload();
-          } catch (e) {
-            toast(errorText(e));
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        <Plus /> Agregar {nextYearName(tree)}
-      </Button>
+      <section className="mt-9">
+        <button onClick={() => setAllOpen(!allOpen)} className="flex items-center gap-2 text-lg font-bold" aria-expanded={allOpen}>
+          <ChevronRight width={20} height={20} className={`transition ${allOpen ? 'rotate-90' : ''}`} />
+          Todas las materias
+          <span className="text-sm font-semibold text-muted bg-sunken rounded-full px-2 py-0.5">
+            {all.filter((x) => !x.m.aprobada).length}
+          </span>
+        </button>
+        {allOpen && (
+          <div className="fade-up">
+            {tree.years.map((y) => (
+              <div
+                key={y.id}
+                className={`mt-6 rounded-3xl transition ${dropYear === y.id ? 'outline-4 outline-dashed outline-accent outline-offset-8 bg-accent-soft/40' : ''}`}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDropYear(y.id);
+                }}
+                onDragLeave={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropYear(null);
+                }}
+                onDrop={async (e) => {
+                  e.preventDefault();
+                  setDropYear(null);
+                  importGroups(y, await itemsFromDrop(e.dataTransfer));
+                }}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-bold text-muted">
+                    {y.name}
+                    {dropYear === y.id && <span className="text-accent"> · Soltá para crear las materias acá</span>}
+                  </h3>
+                  <Menu
+                    label={`Opciones de ${y.name}`}
+                    items={[
+                      { label: 'Agregar materia', icon: <Plus />, onClick: () => setAdding({ year: y }) },
+                      { label: 'Cambiar nombre', icon: <Pencil />, onClick: () => setRenaming(y) },
+                      { label: 'Eliminar año', icon: <Trash />, danger: true, onClick: () => setDeleting(y) },
+                    ]}
+                  />
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {y.materias
+                    .filter((m) => !m.aprobada)
+                    .map((m) => (
+                      <MateriaCard key={m.id} m={m} />
+                    ))}
+                  <button
+                    onClick={() => setAdding({ year: y })}
+                    className="rounded-2xl border-2 border-dashed border-line min-h-24 flex items-center justify-center gap-2 text-muted font-semibold text-[15px] hover:border-accent hover:text-accent transition"
+                  >
+                    <Plus /> Materia
+                  </button>
+                </div>
+              </div>
+            ))}
+            <Button
+              className="mt-6"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  await addYear(tree);
+                  await reload();
+                } catch (e) {
+                  toast(errorText(e));
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              <Plus /> Agregar {nextYearName(tree)}
+            </Button>
+          </div>
+        )}
+      </section>
 
       <Approved />
 
@@ -163,6 +210,7 @@ export default function Home() {
         </section>
       )}
 
+      {picking && <CursandoPicker onClose={() => setPicking(false)} />}
       {adding && (
         <NewMateria
           key={adding.prefill?.name ?? 'nueva'}
@@ -204,18 +252,130 @@ export default function Home() {
   );
 }
 
-// "8 aprobadas · promedio 7,85"
+function usePersisted(key: string, initial: boolean) {
+  const [v, setV] = useState(() => {
+    try {
+      const s = localStorage.getItem(key);
+      return s === null ? initial : s === '1';
+    } catch {
+      return initial;
+    }
+  });
+  const set = (n: boolean) => {
+    setV(n);
+    try {
+      localStorage.setItem(key, n ? '1' : '0');
+    } catch {}
+  };
+  return [v, set] as const;
+}
+
+// Tarjeta de materia: nombre, año y la próxima fecha.
+function MateriaCard({ m, year }: { m: Materia; year?: Year }) {
+  const { tree } = useFacu();
+  const next = upcomingExams(tree, m.id)[0];
+  const n = next ? daysUntil(next.date) : null;
+  return (
+    <button
+      onClick={() => go(`/m/${m.id}`)}
+      className="group relative text-left bg-surface border border-line rounded-2xl p-4 pl-5 min-h-24 flex flex-col overflow-hidden hover:-translate-y-0.5 hover:shadow-md active:scale-[.98] transition"
+    >
+      <span className="absolute inset-y-0 left-0 w-1.5" style={{ background: m.color }} />
+      {year && <span className="text-xs font-semibold text-muted mb-1">{year.name}</span>}
+      <span className="font-bold leading-snug line-clamp-2">{m.name}</span>
+      <span className={`mt-auto pt-2 text-xs font-semibold truncate ${n !== null && n <= 3 ? 'text-accent' : 'text-muted'}`}>
+        {next ? `${next.title} · ${whenLabel(next.date).toLowerCase()}` : m.estado === 'final' ? 'Final pendiente' : ' '}
+      </span>
+    </button>
+  );
+}
+
+// Elegir qué materias se están cursando (pueden ser de años distintos).
+function CursandoPicker({ onClose }: { onClose: () => void }) {
+  const { tree, reload } = useFacu();
+  const toast = useToast();
+  const [on, setOn] = useState(
+    () => new Set([...tree.materias.values()].filter((m) => m.estado === 'cursando').map((m) => m.id)),
+  );
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    setBusy(true);
+    try {
+      for (const m of tree.materias.values()) {
+        if (m.aprobada) continue;
+        const want = on.has(m.id);
+        if (want && m.estado !== 'cursando') await setEstado(m, 'cursando');
+        if (!want && m.estado === 'cursando') await setEstado(m, null);
+      }
+      await reload();
+      onClose();
+    } catch (e) {
+      toast(errorText(e));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal title="¿Qué estás cursando?" onClose={onClose}>
+      <p className="text-muted text-[15px] -mt-2 mb-4">Tildá las materias de este cuatrimestre.</p>
+      <div className="max-h-[50dvh] overflow-y-auto -mx-2 px-2">
+        {tree.years.map((y) => {
+          const ms = y.materias.filter((m) => !m.aprobada);
+          if (!ms.length) return null;
+          return (
+            <div key={y.id} className="mb-4">
+              <h3 className="text-sm font-bold text-muted mb-1">{y.name}</h3>
+              {ms.map((m) => {
+                const checked = on.has(m.id);
+                return (
+                  <label key={m.id} className="flex items-center gap-3 h-12 px-2 rounded-xl hover:bg-sunken cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {
+                        const n = new Set(on);
+                        if (checked) n.delete(m.id);
+                        else n.add(m.id);
+                        setOn(n);
+                      }}
+                      className="size-5 accent-[var(--accent)]"
+                    />
+                    <span className="size-3 rounded-full shrink-0" style={{ background: m.color }} />
+                    <span className="font-medium truncate">{m.name}</span>
+                    {m.estado === 'final' && <span className="ml-auto text-xs text-muted">final pendiente</span>}
+                  </label>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+      <Button variant="primary" className="w-full mt-3" disabled={busy} onClick={save}>
+        {busy ? 'Guardando…' : `Listo · ${on.size} ${on.size === 1 ? 'materia' : 'materias'}`}
+      </Button>
+    </Modal>
+  );
+}
+
+// "Cursando 5 · 8 aprobadas · promedio 7,85"
 function Stats() {
   const { tree } = useFacu();
-  const aprobadas = [...tree.materias.values()].filter((m) => m.aprobada).length;
+  const ms = [...tree.materias.values()];
+  const aprobadas = ms.filter((m) => m.aprobada).length;
+  const cursando = ms.filter((m) => m.estado === 'cursando').length;
   const p = promedio(tree);
-  if (!aprobadas) return null;
+  const parts = [
+    cursando ? `Cursando ${cursando}` : null,
+    aprobadas ? `${aprobadas} ${aprobadas === 1 ? 'aprobada' : 'aprobadas'}` : null,
+  ].filter(Boolean);
+  if (!parts.length && !p) return null;
   return (
-    <p className="text-sm text-muted mt-1">
-      {aprobadas} {aprobadas === 1 ? 'materia aprobada' : 'materias aprobadas'}
+    <p className="text-[15px] text-muted mt-1">
+      {parts.join(' · ')}
       {p && (
         <>
-          {' · '}promedio <span className="font-extrabold text-ink">{fmtNota(p.valor)}</span>
+          {parts.length ? ' · ' : ''}promedio <span className="font-extrabold text-ink">{fmtNota(p.valor)}</span>
         </>
       )}
     </p>

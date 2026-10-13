@@ -126,3 +126,36 @@ export const Calendar = (p: P) => (
     <path d="M4 10h16M9 3v4M15 3v4" />
   </Base>
 );
+export const HomeIcon = (p: P) => (
+  <Base {...p}>
+    <path d="M4 10.5L12 4l8 6.5V20h-5v-6H9v6H4z" />
+  </Base>
+);
+export const UserIcon = (p: P) => (
+  <Base {...p}>
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 21a8 8 0 0 1 16 0" />
+  </Base>
+);
+export const ChevronRight = (p: P) => (
+  <Base {...p}>
+    <path d="M9 6l6 6-6 6" />
+  </Base>
+);
+export const ChevronLeft = (p: P) => (
+  <Base {...p}>
+    <path d="M15 6l-6 6 6 6" />
+  </Base>
+);
+export const Note = (p: P) => (
+  <Base {...p}>
+    <path d="M6 3h9l4 4v14H6z" />
+    <path d="M9 12h6M9 16h4" />
+  </Base>
+);
+export const Sun = (p: P) => (
+  <Base {...p}>
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+  </Base>
+);

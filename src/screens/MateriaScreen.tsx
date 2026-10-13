@@ -1,13 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
-import { MateriaExams } from '../components/Exams';
-import { ApproveModal, MateriaGrades } from '../components/Grades';
-import { fmtNota } from '../lib/datos';
 import FileTile, { DRAG_TYPE, type DragFile } from '../components/FileTile';
-import MoveModal from '../components/MoveModal';
 import {
   Back,
   Camera,
-  Check,
+  ChevronRight,
   Close,
   External,
   Folder as FolderIcon,
@@ -19,25 +15,27 @@ import {
   Trash,
   UploadIcon,
 } from '../components/icons';
+import { MateriaInfoModal, MateriaSummary, estadoLabel } from '../components/MateriaInfo';
+import MoveModal from '../components/MoveModal';
 import UploadSheet from '../components/UploadSheet';
-import { Button, ConfirmModal, IconButton, Menu, PromptModal, Spinner, errorText, useToast, type MenuItem } from '../components/ui';
+import { Button, ConfirmModal, IconButton, Menu, Modal, PromptModal, errorText, useToast, type MenuItem } from '../components/ui';
 import { CHANGED, notifyChanged, useFacu } from '../lib/context';
 import { list, move, trash } from '../lib/drive';
-import { keepOffline } from '../lib/fileBlob';
-import { offlineIds } from '../lib/offline';
 import {
   addFolder,
   folderPath,
   materiaFiles,
-  searchInMateria,
-  setAprobada,
   renameFolder,
+  searchInMateria,
   trashFolder,
   type FileItem,
   type Folder,
+  type Materia,
 } from '../lib/facu';
+import { keepOffline } from '../lib/fileBlob';
 import { baseName, cleanNames, naturalCompare } from '../lib/files';
-import { go } from '../lib/router';
+import { offlineIds } from '../lib/offline';
+import { go, setViewerList } from '../lib/router';
 import { itemsFromDrop, itemsFromInput, mergeSameName, type UploadItem } from '../lib/upload';
 
 type Sort = 'nombre' | 'recientes';
@@ -58,7 +56,8 @@ type ModalKind =
   | 'unwrap-folder'
   | 'delete-folder'
   | 'new-folder'
-  | 'approve';
+  | 'info'
+  | 'add';
 
 export default function MateriaScreen({ id, folderId }: { id: string; folderId?: string }) {
   const { tree, reload } = useFacu();
@@ -79,6 +78,7 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
     setSelectMode(false);
   };
   const [query, setQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
   const [contentHits, setContentHits] = useState<FileItem[] | null>(null);
   const [bulk, setBulk] = useState<'move' | 'delete' | null>(null);
   const [offline, setOffline] = useState<Set<string>>(new Set());
@@ -108,10 +108,10 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
     return () => removeEventListener(CHANGED, load);
   }, [load]);
 
-  // Al cambiar de carpeta se limpia la selección.
+  // Al cambiar de carpeta se limpia la selección y vuelve arriba.
   useEffect(() => {
-    setSelected(new Set());
-    setSelectMode(false);
+    clearSelection();
+    scrollTo({ top: 0 });
   }, [current?.id]);
 
   // Además del nombre, busca adentro de los PDF y Word de la materia.
@@ -160,6 +160,18 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
     return { list, names };
   }, [files, current, sort]);
 
+  // Lo último que se agregó a la materia, para la vista general.
+  const recent = useMemo(
+    () => [...(files ?? [])].sort((a, b) => b.modifiedTime.localeCompare(a.modifiedTime)).slice(0, 4),
+    [files],
+  );
+
+  // El lector usa esta lista para pasar al anterior o siguiente.
+  useEffect(() => {
+    const shown = results ? [...results.byName, ...results.byContent] : here.list;
+    setViewerList(shown.map((f) => f.id));
+  }, [results, here]);
+
   if (!m)
     return (
       <div className="min-h-dvh grid place-items-center p-6 text-center">
@@ -172,8 +184,8 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
 
   const year = tree.years.find((y) => y.id === m.yearId);
   const path = folderPath(current);
-  const selectedTop = path[0];
   const openFolder = (f?: Folder) => go(f ? `/m/${m.id}/${f.id}` : `/m/${m.id}`);
+  const goBack = () => (current ? openFolder(current.parent) : go('/'));
   const destId = current?.id ?? m.id;
   const destName = current?.name ?? m.name;
 
@@ -258,20 +270,6 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
         ]
       : []),
     { label: 'Ver en Google Drive', icon: <External />, onClick: () => open(`https://drive.google.com/drive/folders/${destId}`, '_blank') },
-    {
-      label: m.aprobada ? 'Volver a cursando' : 'Marcar como aprobada',
-      icon: <Check />,
-      onClick: async () => {
-        if (!m.aprobada) return setModal('approve');
-        try {
-          await setAprobada(m, false);
-          await reload();
-          toast(`${m.name} volvió a cursando`);
-        } catch (e) {
-          toast(errorText(e));
-        }
-      },
-    },
     { label: 'Renombrar materia', icon: <Pencil />, onClick: () => setModal('rename-materia') },
     { label: 'Eliminar materia', icon: <Trash />, danger: true, onClick: () => setModal('delete-materia') },
   ];
@@ -283,6 +281,110 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
     }
     e.target.value = '';
   };
+
+  const searchBox = (autoFocus: boolean) => (
+    <div className="flex items-center gap-2 h-10 px-3 rounded-xl bg-sunken border border-transparent focus-within:border-accent min-w-0">
+      <SearchIcon width={18} height={18} className="text-muted shrink-0" />
+      <input
+        autoFocus={autoFocus}
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            setQuery('');
+            setSearchOpen(false);
+          }
+        }}
+        placeholder={`Buscar en ${m.name}…`}
+        className="flex-1 bg-transparent outline-none text-[15px] min-w-0"
+      />
+      {query && (
+        <button onClick={() => setQuery('')} aria-label="Borrar búsqueda" className="text-muted hover:text-ink">
+          <Close width={18} height={18} />
+        </button>
+      )}
+    </div>
+  );
+
+  // Carpeta abierta: subcarpetas arriba, archivos abajo. Sin carpeta: lo último y los sueltos.
+  const content =
+    files === null ? (
+      <SkeletonGrid />
+    ) : results ? (
+      <SearchResults
+        query={query}
+        results={results}
+        searching={contentHits === null && query.trim().length >= 3}
+        materia={m}
+        tile={tile}
+      />
+    ) : (
+      <>
+        {current && current.children.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 mb-6">
+            {current.children.map((f) => (
+              <FolderCard
+                key={f.id}
+                name={f.name}
+                color={m.color}
+                count={counts.get(f.id) ?? 0}
+                onClick={() => openFolder(f)}
+                onFileDrop={(d) => moveTo(d, f.id, f.name)}
+              />
+            ))}
+          </div>
+        )}
+
+        {!current && recent.length > 0 && here.list.length !== recent.length && (
+          <section className="mb-8">
+            <h2 className="text-sm font-bold text-muted mb-3">Lo último que agregaste</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+              {recent.map((f) => tile(f, undefined, baseName(f.name), placeLabel(f)))}
+            </div>
+          </section>
+        )}
+
+        {here.list.length > 0 ? (
+          <section>
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <h2 className="text-sm font-bold text-muted truncate">
+                {current ? '' : 'Sueltos · '}
+                {here.list.length} {here.list.length === 1 ? 'archivo' : 'archivos'}
+              </h2>
+              <div className="flex items-center gap-1 shrink-0 whitespace-nowrap">
+                <button
+                  onClick={() => (selecting ? clearSelection() : setSelectMode(true))}
+                  className="h-9 px-2.5 rounded-xl text-sm font-semibold text-muted hover:text-ink hover:bg-sunken"
+                >
+                  {selecting ? 'Listo' : 'Seleccionar'}
+                </button>
+                <button
+                  onClick={() => changeSort(sort === 'nombre' ? 'recientes' : 'nombre')}
+                  title="Cambiar el orden"
+                  className="h-9 px-3 rounded-xl bg-sunken text-sm font-semibold flex items-center gap-1.5"
+                >
+                  <SortIcon /> {sort === 'nombre' ? 'En orden' : 'Recientes'}
+                </button>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+              {here.list.map((f) => {
+                const n = here.names.get(f.id)!;
+                return tile(f, n.code, n.title);
+              })}
+            </div>
+          </section>
+        ) : current ? (
+          current.children.length === 0 && (
+            <EmptyDrop onClick={() => fileInput.current?.click()} title="Esta carpeta está vacía" />
+          )
+        ) : m.folders.length === 0 ? (
+          <EmptyDrop onClick={() => fileInput.current?.click()} title="Todavía no hay nada acá" />
+        ) : (
+          recent.length === 0 && <p className="text-muted text-center py-10">Elegí una carpeta para ver sus archivos.</p>
+        )}
+      </>
+    );
 
   return (
     <div
@@ -297,227 +399,184 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
       }}
       onDrop={onDrop}
     >
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 pb-16 safe-top">
-        <header className="flex items-center gap-1 pt-4 pb-2 -ml-2">
-          <IconButton label="Volver" onClick={() => (current ? openFolder(current.parent) : go('/'))}>
-            <Back />
-          </IconButton>
-          <span className="text-sm font-medium text-muted flex-1">{year?.name}</span>
-          <Menu items={menu} />
-        </header>
+      <input ref={fileInput} type="file" multiple hidden onChange={pickInput} />
+      <input ref={folderInput} type="file" multiple hidden onChange={pickInput} />
+      <input ref={cameraInput} type="file" accept="image/*" capture="environment" hidden onChange={pickInput} />
 
-        <DropTarget onFile={(d) => moveTo(d, m.id, m.name)}>
-          {(over) => (
-        <button
-          onClick={() => openFolder()}
-          className={`flex items-center gap-3 mb-3 text-left rounded-2xl -m-2 p-2 transition ${over ? 'bg-accent-soft ring-2 ring-accent' : ''}`}
-        >
-          <span
-            className="size-11 rounded-2xl grid place-items-center text-white text-lg font-extrabold shrink-0"
-            style={{ background: m.color }}
-          >
-            {m.name.charAt(0).toUpperCase()}
-          </span>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight leading-tight">{m.name}</h1>
-          {over && <span className="text-sm font-semibold text-accent">Soltá para dejarlo suelto acá</span>}
-        </button>
-          )}
-        </DropTarget>
-
-        {m.aprobada ? (
-          <button
-            onClick={() => setModal('approve')}
-            title="Cambiar nota final"
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full bg-accent-soft text-accent text-sm font-bold mb-5"
-          >
-            <Check width={16} height={16} /> Aprobada{m.nota !== undefined && ` con ${fmtNota(m.nota)}`}
+      <div className="lg:flex">
+        {/* Compu: barra lateral con la materia y sus carpetas */}
+        <aside className="hidden lg:flex flex-col w-72 shrink-0 h-dvh sticky top-0 overflow-y-auto border-r border-line px-4 py-5 gap-5">
+          <button onClick={() => go('/')} className="flex items-center gap-1 text-sm font-semibold text-muted hover:text-ink -ml-1">
+            <Back width={18} height={18} /> Inicio
           </button>
-        ) : (
-          <MateriaExams materiaId={m.id} />
-        )}
-        <MateriaGrades materiaId={m.id} />
-
-        <div className="flex gap-2 flex-wrap">
-          <Button variant="primary" onClick={() => fileInput.current?.click()} className="flex-1 sm:flex-none">
-            <UploadIcon className="shrink-0" /> <span className="sm:hidden">Subir</span>
-            <span className="hidden sm:inline">Subir archivos</span>
-          </Button>
-          <Button onClick={() => folderInput.current?.click()} className="hidden md:inline-flex">
-            <FolderIcon /> Subir carpeta
-          </Button>
-          <Button onClick={() => cameraInput.current?.click()} className="md:hidden">
-            <Camera /> Foto
-          </Button>
-        </div>
-        <p className="text-sm text-muted mt-2.5">
-          Se guarda en <span className="font-semibold text-ink">{[m.name, ...path.map((f) => f.name)].join(' › ')}</span>
-          <span className="hidden md:inline"> · También podés arrastrar archivos y varias carpetas a la ventana</span>
-        </p>
-        <input ref={fileInput} type="file" multiple hidden onChange={pickInput} />
-        <input ref={folderInput} type="file" multiple hidden onChange={pickInput} />
-        <input ref={cameraInput} type="file" accept="image/*" capture="environment" hidden onChange={pickInput} />
-
-        <div className="mt-6 flex items-center gap-2 h-11 px-4 rounded-2xl bg-surface border border-line focus-within:border-accent">
-          <SearchIcon className="text-muted shrink-0" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
-            placeholder={`Buscar en ${m.name}…`}
-            className="flex-1 bg-transparent outline-none text-[15px] min-w-0"
-          />
-          {query && (
-            <button onClick={() => setQuery('')} aria-label="Borrar búsqueda" className="text-muted hover:text-ink">
-              <Close />
-            </button>
-          )}
-        </div>
-
-        {files === null ? (
-          <div className="py-16 grid place-items-center">
-            <Spinner />
-          </div>
-        ) : results ? (
-          <section className="mt-6">
-            {results.byName.length + results.byContent.length === 0 ? (
-              <p className="text-muted text-center py-8">
-                {contentHits === null && query.trim().length >= 3
-                  ? 'Buscando…'
-                  : `No encontramos nada con “${query.trim()}” en ${m.name}.`}
-              </p>
-            ) : (
-              <>
-                {results.byName.length > 0 && (
-                  <>
-                    <p className="text-sm text-muted font-medium mb-3">
-                      {results.byName.length} {results.byName.length === 1 ? 'archivo' : 'archivos'} con ese nombre
-                    </p>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                      {results.byName.map((f) => tile(f, undefined, baseName(f.name), placeLabel(f)))}
-                    </div>
-                  </>
-                )}
-                {results.byContent.length > 0 && (
-                  <>
-                    <p className="text-sm text-muted font-medium mb-3 mt-6">Lo mencionan adentro</p>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                      {results.byContent.map((f) => tile(f, undefined, baseName(f.name), placeLabel(f)))}
-                    </div>
-                  </>
-                )}
-              </>
-            )}
-          </section>
-        ) : (
-          <>
-            {/* Carpetas de la materia */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mt-5">
-              {m.folders.map((f) => (
-                <FolderCard
-                  key={f.id}
-                  name={f.name}
-                  color={m.color}
-                  count={counts.get(f.id) ?? 0}
-                  selected={selectedTop?.id === f.id}
-                  onClick={() => openFolder(selectedTop?.id === f.id && !current?.parent ? undefined : f)}
-                  onFileDrop={(d) => moveTo(d, f.id, f.name)}
-                />
-              ))}
-              <NewFolderCard label="Nueva carpeta" onClick={() => (openFolder(), setModal('new-folder'))} />
-            </div>
-
-            {/* Contenido de la carpeta elegida (o archivos sueltos) */}
-            <section className="mt-8">
-              {current && (
-                <nav className="flex items-center gap-1.5 flex-wrap mb-4 text-[15px]">
-                  {path.map((f, i) => (
-                    <span key={f.id} className="flex items-center gap-1.5">
-                      {i > 0 && <span className="text-muted">›</span>}
-                      <button
-                        onClick={() => openFolder(f)}
-                        className={i === path.length - 1 ? 'font-bold text-lg' : 'text-muted hover:text-ink font-medium'}
-                      >
-                        {f.name}
-                      </button>
-                    </span>
-                  ))}
-                </nav>
-              )}
-
-              {current && current.children.length > 0 && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-6">
-                  {current.children.map((f) => (
-                    <FolderCard
-                      key={f.id}
-                      small
-                      name={f.name}
-                      color={m.color}
-                      count={counts.get(f.id) ?? 0}
-                      onClick={() => openFolder(f)}
-                      onFileDrop={(d) => moveTo(d, f.id, f.name)}
-                    />
-                  ))}
-                </div>
-              )}
-
-              {here.list.length > 0 ? (
-                <>
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-sm text-muted font-medium">
-                      {current ? '' : 'Archivos sueltos · '}
-                      {here.list.length} {here.list.length === 1 ? 'archivo' : 'archivos'}
-                    </p>
-                    <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => (selecting ? clearSelection() : setSelectMode(true))}
-                      className="h-10 px-3 rounded-xl text-sm font-semibold text-muted hover:text-ink hover:bg-sunken"
-                    >
-                      {selecting ? 'Listo' : 'Seleccionar'}
-                    </button>
-                    <div className="flex bg-sunken rounded-xl p-1 text-sm font-semibold">
-                      <SortButton on={sort === 'nombre'} onClick={() => changeSort('nombre')}>
-                        En orden
-                      </SortButton>
-                      <SortButton on={sort === 'recientes'} onClick={() => changeSort('recientes')}>
-                        Recientes
-                      </SortButton>
-                    </div>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                    {here.list.map((f) => {
-                      const n = here.names.get(f.id)!;
-                      return tile(f, n.code, n.title);
-                    })}
-                  </div>
-                </>
-              ) : current ? (
-                current.children.length === 0 && (
-                  <EmptyDrop onClick={() => fileInput.current?.click()} title="Esta carpeta está vacía" />
-                )
-              ) : m.folders.length === 0 ? (
-                <EmptyDrop onClick={() => fileInput.current?.click()} title="Todavía no hay nada acá" />
-              ) : (
-                <p className="text-muted text-center py-6">Elegí una carpeta para ver sus archivos.</p>
-              )}
-
-              {current && (
-                <button
-                  onClick={() => setModal('new-folder')}
-                  className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-muted hover:text-ink"
+          <DropTarget onFile={(d) => moveTo(d, m.id, m.name)}>
+            {(over) => (
+              <button
+                onClick={() => openFolder()}
+                className={`text-left rounded-2xl p-2 -m-2 transition ${over ? 'bg-accent-soft ring-2 ring-accent' : ''}`}
+              >
+                <span
+                  className="size-11 rounded-2xl grid place-items-center text-white text-lg font-extrabold mb-3"
+                  style={{ background: m.color }}
                 >
-                  <Plus /> Nueva subcarpeta en {current.name}
+                  {m.name.charAt(0).toUpperCase()}
+                </span>
+                <h1 className="text-xl font-extrabold tracking-tight leading-tight">{m.name}</h1>
+                <p className="text-sm text-muted mt-0.5">
+                  {year?.name}
+                  {estadoLabel(m) && <span className="text-accent font-semibold"> · {estadoLabel(m)}</span>}
+                </p>
+              </button>
+            )}
+          </DropTarget>
+
+          <MateriaSummary m={m} onOpen={() => setModal('info')} />
+
+          <nav className="flex flex-col gap-0.5 -mx-2">
+            <TreeItem
+              label="Toda la materia"
+              depth={0}
+              on={!current}
+              color={m.color}
+              onClick={() => openFolder()}
+              onFileDrop={(d) => moveTo(d, m.id, m.name)}
+            />
+            {m.folders.map((f) => (
+              <FolderTree key={f.id} folder={f} depth={0} current={current} path={path} counts={counts} color={m.color} open={openFolder} drop={moveTo} />
+            ))}
+            <button
+              onClick={() => setModal('new-folder')}
+              className="flex items-center gap-2 h-9 px-3 rounded-xl text-sm font-semibold text-muted hover:text-ink hover:bg-sunken"
+            >
+              <Plus width={18} height={18} /> Nueva carpeta{current && ` en ${current.name}`}
+            </button>
+          </nav>
+        </aside>
+
+        <main className="flex-1 min-w-0">
+          {/* Celu y tablet: barra de arriba fija */}
+          <header className="lg:hidden sticky top-0 z-20 bg-bg/90 backdrop-blur safe-top">
+            <div className="flex items-center gap-1 h-14 px-2">
+              <IconButton label="Volver" onClick={goBack}>
+                <Back />
+              </IconButton>
+              {searchOpen ? (
+                <div className="flex-1 min-w-0">{searchBox(true)}</div>
+              ) : (
+                <button onClick={() => openFolder()} className="flex-1 min-w-0 flex items-center gap-2 text-left">
+                  <span className="size-3 rounded-full shrink-0" style={{ background: m.color }} />
+                  <span className="font-bold text-[17px] truncate">{m.name}</span>
                 </button>
               )}
-            </section>
-          </>
-        )}
+              <IconButton
+                label={searchOpen ? 'Cerrar búsqueda' : 'Buscar en la materia'}
+                onClick={() => {
+                  if (searchOpen) setQuery('');
+                  setSearchOpen(!searchOpen);
+                }}
+              >
+                {searchOpen ? <Close /> : <SearchIcon />}
+              </IconButton>
+              <Menu items={menu} />
+            </div>
+            {/* Pestañas de carpetas */}
+            <div className="flex gap-2 overflow-x-auto no-scrollbar px-4 pb-3">
+              <Tab on={!current} onClick={() => openFolder()}>
+                General
+              </Tab>
+              {m.folders.map((f) => (
+                <Tab key={f.id} on={path[0]?.id === f.id} onClick={() => openFolder(f)} count={counts.get(f.id) ?? 0}>
+                  {f.name}
+                </Tab>
+              ))}
+              <button
+                onClick={() => setModal('new-folder')}
+                aria-label="Nueva carpeta"
+                className="shrink-0 h-9 w-9 rounded-full border border-dashed border-line grid place-items-center text-muted"
+              >
+                <Plus width={18} height={18} />
+              </button>
+            </div>
+          </header>
+
+          {/* Compu: barra de herramientas */}
+          <div className="hidden lg:flex items-center gap-3 px-8 pt-6 pb-4">
+            <nav className="flex items-center gap-1 min-w-0 flex-1 text-[15px]">
+              {!current && <span className="font-bold text-xl truncate">Toda la materia</span>}
+              {path.map((f, i) => (
+                <span key={f.id} className="flex items-center gap-1 min-w-0">
+                  {i > 0 && <ChevronRight width={16} height={16} className="text-muted shrink-0" />}
+                  <button
+                    onClick={() => openFolder(f)}
+                    className={`truncate ${i === path.length - 1 ? 'font-bold text-xl' : 'text-muted hover:text-ink font-medium'}`}
+                  >
+                    {f.name}
+                  </button>
+                </span>
+              ))}
+            </nav>
+            <div className="w-56 xl:w-64">{searchBox(false)}</div>
+            <Button variant="primary" onClick={() => fileInput.current?.click()}>
+              <UploadIcon /> Subir archivos
+            </Button>
+            <Button onClick={() => folderInput.current?.click()} title="Subir carpeta">
+              <FolderIcon /> <span className="hidden xl:inline">Subir carpeta</span>
+            </Button>
+            <Menu items={menu} />
+          </div>
+
+          <div className="px-4 sm:px-6 lg:px-8 pb-28 lg:pb-12">
+            {/* Celu: resumen de fechas y notas, y camino de subcarpetas */}
+            <div className="lg:hidden">
+              {!current && !results && (
+                <div className="mb-5">
+                  <MateriaSummary m={m} onOpen={() => setModal('info')} />
+                </div>
+              )}
+              {path.length > 1 && !results && (
+                <button
+                  onClick={() => openFolder(current!.parent)}
+                  className="flex items-center gap-1 text-sm font-semibold text-muted mb-3"
+                >
+                  <Back width={16} height={16} /> {path.slice(0, -1).map((f) => f.name).join(' › ')}
+                  <span className="text-ink"> › {current!.name}</span>
+                </button>
+              )}
+            </div>
+            {content}
+            <p className="hidden lg:block text-sm text-muted mt-10 text-center">
+              Tip: arrastrá archivos o carpetas desde tu compu a esta ventana para subirlos a {destName}.
+            </p>
+          </div>
+        </main>
       </div>
 
-      {modal === 'approve' && <ApproveModal materia={m} onClose={() => setModal(null)} />}
+      {/* Celu: botón + para subir */}
+      {!selecting && (
+        <button
+          onClick={() => setModal('add')}
+          aria-label="Agregar"
+          className="lg:hidden fixed right-4 bottom-24 z-30 size-14 rounded-2xl bg-accent text-on-accent shadow-lg grid place-items-center active:scale-95 transition"
+        >
+          <Plus width={28} height={28} />
+        </button>
+      )}
+
+      {modal === 'add' && (
+        <Modal title={`Agregar a ${destName}`} onClose={() => setModal(null)}>
+          <div className="grid gap-2">
+            <SheetAction icon={<UploadIcon />} label="Subir archivos" hint="PDF, Word, fotos…" onClick={() => (setModal(null), fileInput.current?.click())} />
+            <SheetAction icon={<Camera />} label="Sacar una foto" hint="Del pizarrón o de tus apuntes" onClick={() => (setModal(null), cameraInput.current?.click())} />
+            <SheetAction icon={<FolderIcon />} label="Subir una carpeta entera" onClick={() => (setModal(null), folderInput.current?.click())} />
+            <SheetAction icon={<Plus />} label="Nueva carpeta" onClick={() => setModal('new-folder')} />
+          </div>
+        </Modal>
+      )}
+      {modal === 'info' && <MateriaInfoModal m={m} onClose={() => setModal(null)} />}
+
       {selecting && (
-        <div className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-3 pb-4 safe-bottom pointer-events-none">
-          <div className="pointer-events-auto flex items-center gap-1 bg-ink text-bg rounded-2xl shadow-xl p-1.5 pl-4 max-w-full">
+        <div className="fixed inset-x-0 bottom-20 lg:bottom-0 z-40 flex justify-center px-3 pb-4 lg:pl-20 safe-bottom pointer-events-none">
+          <div className="pointer-events-auto flex items-center gap-1 bg-ink text-bg rounded-2xl shadow-xl p-1.5 pl-4 max-w-full sheet-up">
             <span className="font-semibold text-[15px] whitespace-nowrap mr-2">
               {selected.size}
               <span className="hidden sm:inline"> {selected.size === 1 ? 'seleccionado' : 'seleccionados'}</span>
@@ -526,11 +585,11 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
             <BarButton disabled={!selected.size} onClick={() => setBulk('move')}>
               <Move width={18} height={18} /> Mover
             </BarButton>
-            <BarButton disabled={!selected.size} onClick={saveSelectedOffline}>
+            <BarButton disabled={!selected.size} onClick={saveSelectedOffline} label="Guardar sin conexión">
               <Offline width={18} height={18} /> <span className="hidden sm:inline">Sin conexión</span>
             </BarButton>
             <BarButton disabled={!selected.size} onClick={() => setBulk('delete')}>
-              <Trash width={18} height={18} /> Eliminar
+              <Trash width={18} height={18} /> <span className="hidden sm:inline">Eliminar</span>
             </BarButton>
             <BarButton onClick={clearSelection} label="Cancelar selección">
               <Close width={18} height={18} />
@@ -680,55 +739,229 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
   );
 }
 
-function FolderCard({
-  name,
+function SearchResults({
+  query,
+  results,
+  searching,
+  materia,
+  tile,
+}: {
+  query: string;
+  results: { byName: FileItem[]; byContent: FileItem[] };
+  searching: boolean;
+  materia: Materia;
+  tile: (f: FileItem, code: string | undefined, title: string, subtitle?: string) => ReactNode;
+}) {
+  if (results.byName.length + results.byContent.length === 0)
+    return (
+      <p className="text-muted text-center py-10">
+        {searching ? 'Buscando…' : `No encontramos nada con “${query.trim()}” en ${materia.name}.`}
+      </p>
+    );
+  return (
+    <section>
+      {results.byName.length > 0 && (
+        <>
+          <h2 className="text-sm font-bold text-muted mb-3">
+            {results.byName.length} {results.byName.length === 1 ? 'archivo' : 'archivos'} con ese nombre
+          </h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+            {results.byName.map((f) => tile(f, undefined, baseName(f.name), placeLabel(f)))}
+          </div>
+        </>
+      )}
+      {results.byContent.length > 0 && (
+        <>
+          <h2 className="text-sm font-bold text-muted mb-3 mt-8">Lo mencionan adentro</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+            {results.byContent.map((f) => tile(f, undefined, baseName(f.name), placeLabel(f)))}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+// Árbol de carpetas de la barra lateral. Se despliega solo el camino de la carpeta abierta.
+function FolderTree({
+  folder,
+  depth,
+  current,
+  path,
+  counts,
+  color,
+  open,
+  drop,
+}: {
+  folder: Folder;
+  depth: number;
+  current?: Folder;
+  path: Folder[];
+  counts: Map<string, number>;
+  color: string;
+  open: (f?: Folder) => void;
+  drop: (d: DragFile[], id: string, name: string) => void;
+}) {
+  const inPath = path.some((p) => p.id === folder.id);
+  const [expanded, setExpanded] = useState(inPath);
+  useEffect(() => {
+    if (inPath) setExpanded(true);
+  }, [inPath]);
+  return (
+    <>
+      <TreeItem
+        label={folder.name}
+        depth={depth}
+        on={current?.id === folder.id}
+        color={color}
+        count={counts.get(folder.id) ?? 0}
+        expandable={folder.children.length > 0}
+        expanded={expanded}
+        onToggle={() => setExpanded(!expanded)}
+        onClick={() => {
+          open(folder);
+          setExpanded(true);
+        }}
+        onFileDrop={(d) => drop(d, folder.id, folder.name)}
+      />
+      {expanded &&
+        folder.children.map((c) => (
+          <FolderTree key={c.id} folder={c} depth={depth + 1} current={current} path={path} counts={counts} color={color} open={open} drop={drop} />
+        ))}
+    </>
+  );
+}
+
+function TreeItem({
+  label,
+  depth,
+  on,
   color,
   count,
-  selected = false,
-  small = false,
+  expandable,
+  expanded,
+  onToggle,
   onClick,
   onFileDrop,
 }: {
-  name: string;
+  label: string;
+  depth: number;
+  on: boolean;
   color: string;
-  count: number;
-  selected?: boolean;
-  small?: boolean;
+  count?: number;
+  expandable?: boolean;
+  expanded?: boolean;
+  onToggle?: () => void;
   onClick: () => void;
   onFileDrop: (d: DragFile[]) => void;
 }) {
   return (
     <DropTarget onFile={onFileDrop}>
       {(over) => (
-    <button
-      onClick={onClick}
-      aria-pressed={selected}
-      className={`text-left border rounded-2xl flex items-center gap-3 transition active:scale-[.98] ${
-        small ? 'p-3' : 'p-3.5'
-      } ${
-        over
-          ? 'bg-accent-soft border-accent ring-2 ring-accent scale-[1.03]'
-          : selected
-            ? 'bg-accent-soft border-accent ring-1 ring-accent'
-            : 'bg-surface border-line hover:-translate-y-0.5 hover:shadow-md'
-      }`}
-    >
-      <svg viewBox="0 0 48 40" className={`${small ? 'w-8' : 'w-10'} h-auto shrink-0`} aria-hidden>
-        <path d="M4 8a4 4 0 0 1 4-4h11l5 5h16a4 4 0 0 1 4 4v3H4z" fill={color} opacity=".55" />
-        <rect x="4" y="13" width="40" height="23" rx="4" fill={count ? color : 'var(--line)'} />
-      </svg>
-      <div className="min-w-0">
-        <div className="font-semibold leading-snug line-clamp-2 text-[15px]">{name}</div>
-        <div className="text-xs text-muted mt-0.5">
-          {over ? 'Soltá para mover acá' : count ? `${count} ${count === 1 ? 'archivo' : 'archivos'}` : 'Vacía'}
+        <div
+          className={`group flex items-center h-9 rounded-xl text-sm transition ${
+            over ? 'bg-accent-soft ring-2 ring-accent' : on ? 'bg-accent-soft text-ink font-bold' : 'hover:bg-sunken'
+          }`}
+          style={{ paddingLeft: 4 + depth * 16 }}
+        >
+          <button
+            onClick={onToggle}
+            aria-label={expanded ? 'Plegar' : 'Desplegar'}
+            className={`size-6 grid place-items-center text-muted shrink-0 ${expandable ? '' : 'invisible'}`}
+          >
+            <ChevronRight width={14} height={14} className={`transition ${expanded ? 'rotate-90' : ''}`} />
+          </button>
+          <button onClick={onClick} className="flex-1 min-w-0 flex items-center gap-2 h-full pr-3 text-left">
+            <svg viewBox="0 0 48 40" className="w-5 h-auto shrink-0" aria-hidden>
+              <path d="M4 8a4 4 0 0 1 4-4h11l5 5h16a4 4 0 0 1 4 4v3H4z" fill={color} opacity=".55" />
+              <rect x="4" y="13" width="40" height="23" rx="4" fill={count === 0 ? 'var(--line)' : color} />
+            </svg>
+            <span className="truncate flex-1">{label}</span>
+            {count !== undefined && count > 0 && <span className="text-xs text-muted font-medium">{count}</span>}
+          </button>
         </div>
-      </div>
-    </button>
       )}
     </DropTarget>
   );
 }
 
+function Tab({ on, onClick, count, children }: { on: boolean; onClick: () => void; count?: number; children: ReactNode }) {
+  const ref = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!on) return;
+    // Solo se mueve la fila de pestañas (scrollIntoView movería toda la página).
+    const id = setTimeout(() => {
+      const el = ref.current;
+      const row = el?.parentElement;
+      if (!el || !row) return;
+      const delta = el.getBoundingClientRect().left - row.getBoundingClientRect().left;
+      row.scrollTo({ left: row.scrollLeft + delta - row.clientWidth / 2 + el.clientWidth / 2, behavior: 'smooth' });
+    }, 0);
+    return () => clearTimeout(id);
+  }, [on]);
+  return (
+    <button
+      ref={ref}
+      onClick={onClick}
+      className={`shrink-0 h-9 px-4 rounded-full text-sm font-semibold border transition flex items-center gap-1.5 whitespace-nowrap ${
+        on ? 'bg-ink text-bg border-ink' : 'bg-surface border-line'
+      }`}
+    >
+      {children}
+      {!!count && <span className={on ? 'opacity-70' : 'text-muted'}>{count}</span>}
+    </button>
+  );
+}
+
+function SheetAction({ icon, label, hint, onClick }: { icon: ReactNode; label: string; hint?: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="flex items-center gap-4 p-3 rounded-2xl hover:bg-sunken text-left">
+      <span className="size-11 rounded-xl bg-accent-soft text-accent grid place-items-center shrink-0">{icon}</span>
+      <span>
+        <span className="font-semibold block">{label}</span>
+        {hint && <span className="text-sm text-muted">{hint}</span>}
+      </span>
+    </button>
+  );
+}
+
+function FolderCard({
+  name,
+  color,
+  count,
+  onClick,
+  onFileDrop,
+}: {
+  name: string;
+  color: string;
+  count: number;
+  onClick: () => void;
+  onFileDrop: (d: DragFile[]) => void;
+}) {
+  return (
+    <DropTarget onFile={onFileDrop}>
+      {(over) => (
+        <button
+          onClick={onClick}
+          className={`text-left border rounded-2xl flex items-center gap-3 p-3 transition active:scale-[.98] ${
+            over ? 'bg-accent-soft border-accent ring-2 ring-accent scale-[1.03]' : 'bg-surface border-line hover:-translate-y-0.5 hover:shadow-md'
+          }`}
+        >
+          <svg viewBox="0 0 48 40" className="w-9 h-auto shrink-0" aria-hidden>
+            <path d="M4 8a4 4 0 0 1 4-4h11l5 5h16a4 4 0 0 1 4 4v3H4z" fill={color} opacity=".55" />
+            <rect x="4" y="13" width="40" height="23" rx="4" fill={count ? color : 'var(--line)'} />
+          </svg>
+          <div className="min-w-0">
+            <div className="font-semibold leading-snug line-clamp-2 text-[15px]">{name}</div>
+            <div className="text-xs text-muted mt-0.5">
+              {over ? 'Soltá para mover acá' : count ? `${count} ${count === 1 ? 'archivo' : 'archivos'}` : 'Vacía'}
+            </div>
+          </div>
+        </button>
+      )}
+    </DropTarget>
+  );
+}
 
 // Recibe un cuadradito de archivo arrastrado. "contents" no altera la grilla.
 function DropTarget({ onFile, children }: { onFile: (d: DragFile[]) => void; children: (over: boolean) => ReactNode }) {
@@ -760,14 +993,19 @@ function DropTarget({ onFile, children }: { onFile: (d: DragFile[]) => void; chi
   );
 }
 
-function NewFolderCard({ label, onClick }: { label: string; onClick: () => void }) {
+function SkeletonGrid() {
   return (
-    <button
-      onClick={onClick}
-      className="rounded-2xl border-2 border-dashed border-line p-3.5 flex items-center gap-3 text-muted font-semibold text-[15px] hover:border-accent hover:text-accent transition"
-    >
-      <Plus className="shrink-0" /> {label}
-    </button>
+    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3" aria-label="Cargando">
+      {Array.from({ length: 8 }, (_, i) => (
+        <div key={i} className="rounded-2xl border border-line overflow-hidden bg-surface">
+          <div className="aspect-[4/3] skeleton" />
+          <div className="p-3 space-y-2">
+            <div className="h-3.5 rounded skeleton w-4/5" />
+            <div className="h-3 rounded skeleton w-1/3" />
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -802,7 +1040,7 @@ function BarButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      className='h-10 px-3 rounded-xl text-sm font-semibold flex items-center gap-1.5 hover:bg-white/15 disabled:opacity-40 whitespace-nowrap'
+      className="h-10 px-3 rounded-xl text-sm font-semibold flex items-center gap-1.5 hover:bg-white/15 disabled:opacity-40 whitespace-nowrap"
     >
       {children}
     </button>
@@ -811,19 +1049,19 @@ function BarButton({
 
 const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
 
-// Dónde está un archivo dentro de la materia: 'Trabajos prácticos › TP1' o 'Sueltos'.
+// Dónde está un archivo dentro de la materia: 'Trabajos prácticos › TP1' o 'Suelto en la materia'.
 function placeLabel(f: FileItem) {
-  return folderPath(f.folder).map((x) => x.name).join(' › ') || 'Suelto en la materia';
-}
-
-function SortButton({ on, onClick, children }: { on: boolean; onClick: () => void; children: ReactNode }) {
   return (
-    <button
-      onClick={onClick}
-      className={`h-8 px-3 rounded-lg transition ${on ? 'bg-surface text-ink shadow-sm' : 'text-muted hover:text-ink'}`}
-    >
-      {children}
-    </button>
+    folderPath(f.folder)
+      .map((x) => x.name)
+      .join(' › ') || 'Suelto en la materia'
   );
 }
 
+function SortIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4" />
+    </svg>
+  );
+}

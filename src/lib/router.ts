@@ -2,11 +2,13 @@
 //   #/              inicio
 //   #/m/<id>        una materia
 //   #/buscar?q=     buscador
+//   #/fechas        próximas fechas
+//   #/yo            tu perfil, promedio y ajustes
 //   ...?f=<id>      archivo abierto encima de cualquier pantalla
 
 import { useEffect, useState } from 'react';
 
-export type Route = { name: 'home' | 'materia' | 'search'; id?: string; folder?: string; q?: string; file?: string };
+export type Route = { name: 'home' | 'materia' | 'search' | 'fechas' | 'yo'; id?: string; folder?: string; q?: string; file?: string };
 
 function split() {
   const [path, qs = ''] = location.hash.replace(/^#/, '').split('?');
@@ -19,6 +21,8 @@ export function parse(): Route {
   const file = params.get('f') ?? undefined;
   if (parts[0] === 'm' && parts[1]) return { name: 'materia', id: parts[1], folder: parts[2], file };
   if (parts[0] === 'buscar') return { name: 'search', q: params.get('q') ?? '', file };
+  if (parts[0] === 'fechas') return { name: 'fechas', file };
+  if (parts[0] === 'yo') return { name: 'yo', file };
   return { name: 'home', file };
 }
 
@@ -64,3 +68,11 @@ export function closeFile() {
   if (history.state?.viewer) return history.back();
   setParam('f', null);
 }
+
+// Archivos que se están viendo (en el orden de la pantalla), para pasar al anterior o siguiente en el lector.
+let viewerList: string[] = [];
+export const setViewerList = (ids: string[]) => {
+  viewerList = ids;
+};
+export const getViewerList = () => viewerList;
+export const switchFile = (id: string) => setParam('f', id);

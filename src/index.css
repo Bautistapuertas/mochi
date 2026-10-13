@@ -28,8 +28,9 @@
   color-scheme: light;
 }
 
+/* Oscuro: si el sistema lo pide (y no elegiste claro) o si lo elegiste a mano. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --bg: #141414;
     --surface: #1d1d1e;
     --sunken: #262627;
@@ -42,6 +43,20 @@
     --danger: #ff8787;
     color-scheme: dark;
   }
+}
+
+:root[data-theme='dark'] {
+  --bg: #141414;
+  --surface: #1d1d1e;
+  --sunken: #262627;
+  --ink: #f1f0ec;
+  --muted: #9d9c97;
+  --line: #313133;
+  --accent: #ff6b6b;
+  --accent-soft: #3a1f20;
+  --on-accent: #0c0d12;
+  --danger: #ff8787;
+  color-scheme: dark;
 }
 
 html,
@@ -139,3 +154,35 @@ button {
   border-radius: 4px;
   overflow: hidden;
 }
+
+/* Entradas suaves de pantallas, listas y ventanas */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+/* Solo opacidad: mover la pantalla rompería los elementos fijos (botón +, ventanas). */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes sheet-up {
+  from { transform: translateY(24px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+.fade-up { animation: fade-up 0.25s ease-out both; }
+.fade-in { animation: fade-in 0.2s ease-out; }
+.sheet-up { animation: sheet-up 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.skeleton {
+  background: linear-gradient(90deg, var(--sunken) 25%, var(--line) 50%, var(--sunken) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fade-up, .fade-in, .sheet-up, .skeleton { animation: none; }
+}
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

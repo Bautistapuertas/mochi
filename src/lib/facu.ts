@@ -10,11 +10,20 @@ export const YEAR_NAMES = ['1er año', '2do año', '3er año', '4to año', '5to 
 export const COLORS = ['#4c6ef5', '#12b886', '#f59f00', '#e64980', '#7950f2', '#15aabf', '#fa5252', '#74b816'];
 
 export type Folder = { id: string; name: string; parentId: string; parent?: Folder; materia: Materia; children: Folder[] };
+// Sin estado = materia que no estás cursando ni rendiste todavía.
+export type Estado = 'cursando' | 'final' | 'aprobada';
+export const ESTADOS: { key: Estado; label: string }[] = [
+  { key: 'cursando', label: 'Cursando' },
+  { key: 'final', label: 'Final pendiente' },
+  { key: 'aprobada', label: 'Aprobada' },
+];
+
 export type Materia = {
   id: string;
   name: string;
   color: string;
   yearId: string;
+  estado?: Estado;
   aprobada: boolean;
   // Nota final, si se cargó al aprobarla.
   nota?: number;
@@ -56,6 +65,7 @@ export async function loadTree(): Promise<Tree> {
       name: f.name,
       color: f.appProperties.color ?? COLORS[0],
       yearId: year.id,
+      estado: (['cursando', 'final', 'aprobada'] as const).find((e) => e === f.appProperties!.estado),
       aprobada: f.appProperties.estado === 'aprobada',
       nota: f.appProperties.nota ? Number(f.appProperties.nota) : undefined,
       folders: [],
@@ -108,13 +118,16 @@ export async function addYear(tree: Tree, index = tree.years.length) {
 }
 
 export async function addMateria(year: Year, name: string, color: string) {
-  return createFolder(name.trim(), year.id, { facu: 'materia', color });
+  return createFolder(name.trim(), year.id, { facu: 'materia', color, estado: 'cursando' });
 }
 
-export const setAprobada = (m: Materia, aprobada: boolean, nota?: number) =>
+export const setEstado = (m: Materia, estado: Estado | null, nota?: number) =>
   update(m.id, {
-    appProperties: { estado: aprobada ? 'aprobada' : null, nota: aprobada && nota !== undefined ? String(nota) : null },
+    appProperties: { estado, nota: estado === 'aprobada' && nota !== undefined ? String(nota) : null },
   });
+
+export const setAprobada = (m: Materia, aprobada: boolean, nota?: number) =>
+  setEstado(m, aprobada ? 'aprobada' : 'cursando', nota);
 
 // Promedio de la carrera con las notas finales cargadas.
 export function promedio(tree: Tree) {

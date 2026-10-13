@@ -8,6 +8,7 @@ import {
   type ButtonHTMLAttributes,
   type ReactNode,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { KIND_STYLE, kindOf } from '../lib/files';
 import { Close, More } from './icons';
 
@@ -55,10 +56,11 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
     addEventListener('keydown', k);
     return () => removeEventListener('keydown', k);
   }, [onClose]);
-  return (
-    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40" onMouseDown={onClose}>
+  // Se dibuja directo en <body> para quedar siempre encima de todo (barras, botón +).
+  return createPortal(
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40 fade-in" onMouseDown={onClose}>
       <div
-        className="w-full sm:max-w-md bg-surface rounded-t-3xl sm:rounded-3xl p-5 safe-bottom shadow-xl max-h-[90dvh] overflow-y-auto"
+        className="w-full sm:max-w-md bg-surface rounded-t-3xl sm:rounded-3xl p-5 safe-bottom shadow-xl max-h-[90dvh] overflow-y-auto sheet-up"
         onMouseDown={(e) => e.stopPropagation()}
         role="dialog"
         aria-label={title}
@@ -71,7 +73,8 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

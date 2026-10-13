@@ -5,7 +5,10 @@ import { Offline } from './components/icons';
 import { AuthError, currentUser, offlineMode } from './lib/drive';
 import { loadTree, type Tree } from './lib/facu';
 import { useRoute } from './lib/router';
+import Shell from './components/Shell';
+import FechasScreen from './screens/FechasScreen';
 import Home from './screens/Home';
+import YoScreen from './screens/YoScreen';
 import Login from './screens/Login';
 import MateriaScreen from './screens/MateriaScreen';
 import SearchScreen from './screens/SearchScreen';
@@ -80,13 +83,19 @@ export default function App() {
   return (
     <FacuContext.Provider value={{ tree, reload, user: currentUser }}>
       <ToastProvider>
-        {route.name === 'materia' && route.id ? (
-          <MateriaScreen key={route.id} id={route.id} folderId={route.folder} />
-        ) : route.name === 'search' ? (
-          <SearchScreen initial={route.q ?? ''} />
-        ) : (
-          <Home />
-        )}
+        <Shell route={route}>
+          {route.name === 'materia' && route.id ? (
+            <MateriaScreen key={route.id} id={route.id} folderId={route.folder} />
+          ) : route.name === 'search' ? (
+            <SearchScreen initial={route.q ?? ''} />
+          ) : route.name === 'fechas' ? (
+            <FechasScreen />
+          ) : route.name === 'yo' ? (
+            <YoScreen />
+          ) : (
+            <Home />
+          )}
+        </Shell>
         {route.file && <Viewer key={route.file} id={route.file} />}
         <OfflineBanner onBack={reload} />
       </ToastProvider>
