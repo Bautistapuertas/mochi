@@ -3,13 +3,21 @@
 // Año y materia se marcan con appProperties (así no importa si se renombran).
 // Adentro de la materia, las carpetas son libres y pueden tener subcarpetas.
 
-import { createFolder, escapeQuery, FOLDER, list, rename, trash, type DFile } from './drive';
+import { loadDatos, daysUntil, type Exam } from './datos';
+import { createFolder, escapeQuery, FOLDER, list, rename, trash, update, type DFile } from './drive';
 
 export const YEAR_NAMES = ['1er año', '2do año', '3er año', '4to año', '5to año', '6to año', '7mo año'];
 export const COLORS = ['#4c6ef5', '#12b886', '#f59f00', '#e64980', '#7950f2', '#15aabf', '#fa5252', '#74b816'];
 
 export type Folder = { id: string; name: string; parentId: string; parent?: Folder; materia: Materia; children: Folder[] };
-export type Materia = { id: string; name: string; color: string; yearId: string; folders: Folder[] };
+export type Materia = {
+  id: string;
+  name: string;
+  color: string;
+  yearId: string;
+  aprobada: boolean;
+  folders: Folder[];
+};
 export type Year = { id: string; name: string; order: number; materias: Materia[] };
 export type Tree = {
   rootId: string;
@@ -18,6 +26,7 @@ export type Tree = {
   materias: Map<string, Materia>;
   // Todas las carpetas que están adentro de alguna materia (a cualquier profundidad).
   folders: Map<string, Folder>;
+  exams: Exam[];
 };
 // folder vacío = archivo suelto en la materia.
 export type FileItem = DFile & { materia: Materia; folder?: Folder };
@@ -39,7 +48,14 @@ export async function loadTree(): Promise<Tree> {
     if (f.appProperties?.facu !== 'materia') continue;
     const year = f.parents?.map((p) => yearById.get(p)).find(Boolean);
     if (!year) continue;
-    const m: Materia = { id: f.id, name: f.name, color: f.appProperties.color ?? COLORS[0], yearId: year.id, folders: [] };
+    const m: Materia = {
+      id: f.id,
+      name: f.name,
+      color: f.appProperties.color ?? COLORS[0],
+      yearId: year.id,
+      aprobada: f.appProperties.estado === 'aprobada',
+      folders: [],
+    };
     materias.set(m.id, m);
     year.materias.push(m);
   }
@@ -76,7 +92,8 @@ export async function loadTree(): Promise<Tree> {
   for (const m of materias.values()) m.folders.sort(byName);
   for (const f of folders.values()) f.children.sort(byName);
 
-  return { rootId: root.id, rootLink: root.webViewLink, years, materias, folders };
+  const datos = await loadDatos(root.id);
+  return { rootId: root.id, rootLink: root.webViewLink, years, materias, folders, exams: datos.exams };
 }
 
 const yearName = (index: number) => YEAR_NAMES[index] ?? `Año ${index + 1}`;
@@ -88,6 +105,17 @@ export async function addYear(tree: Tree, index = tree.years.length) {
 
 export async function addMateria(year: Year, name: string, color: string) {
   return createFolder(name.trim(), year.id, { facu: 'materia', color });
+}
+
+export const setAprobada = (m: Materia, aprobada: boolean) =>
+  update(m.id, { appProperties: { estado: aprobada ? 'aprobada' : null } });
+
+// Fechas que todavía no pasaron, de materias que se están cursando, la más cercana primero.
+export function upcomingExams(tree: Tree, materiaId?: string) {
+  return tree.exams
+    .filter((e) => daysUntil(e.date) >= 0 && (!materiaId || e.materiaId === materiaId))
+    .filter((e) => { const m = tree.materias.get(e.materiaId); return m && !m.aprobada; })
+    .sort((a, b) => a.date.localeCompare(b.date));
 }
 
 export const addFolder = (name: string, parentId: string) => createFolder(name.trim(), parentId, { facu: 'folder' });
@@ -144,6 +172,22 @@ export async function materiaFiles(tree: Tree, m: Materia) {
   for (let i = 0; i < ids.length; i += 40) chunks.push(ids.slice(i, i + 40));
   const parts = await Promise.all(
     chunks.map((c) => list(`(${c.map((id) => `'${id}' in parents`).join(' or ')}) and ${notFolder}`)),
+  );
+  return toItems(tree, parts.flat());
+}
+
+// Busca adentro de los PDF y Word de una sola materia (Drive indexa el texto).
+export async function searchInMateria(tree: Tree, m: Materia, text: string) {
+  const ids = [m.id, ...materiaFolders(m).map((f) => f.id)];
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += 40) chunks.push(ids.slice(i, i + 40));
+  const parts = await Promise.all(
+    chunks.map((c) =>
+      list(`fullText contains '${escapeQuery(text)}' and (${c.map((id) => `'${id}' in parents`).join(' or ')}) and ${notFolder}`, {
+        pageSize: 100,
+        firstPageOnly: true,
+      }),
+    ),
   );
   return toItems(tree, parts.flat());
 }

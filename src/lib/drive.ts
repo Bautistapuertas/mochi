@@ -64,7 +64,7 @@ function remember<T extends DFile | DFile[]>(f: T): T {
   return f;
 }
 
-const DEMO = import.meta.env.DEV && new URLSearchParams(location.search).has('demo');
+export const DEMO = import.meta.env.DEV && new URLSearchParams(location.search).has('demo');
 
 export async function list(q: string, opts: { orderBy?: string; pageSize?: number; firstPageOnly?: boolean } = {}) {
   if (DEMO) {
@@ -102,7 +102,10 @@ export async function createFolder(name: string, parent: string | undefined, app
   return remember((await r.json()) as DFile);
 }
 
-export async function update(id: string, body: Partial<DFile> & { trashed?: boolean }, params: Record<string, string> = {}) {
+export async function update(
+  id: string,
+  body: Partial<Omit<DFile, 'appProperties'>> & { trashed?: boolean; appProperties?: Record<string, string | null> },
+  params: Record<string, string> = {}) {
   const p = new URLSearchParams({ fields: FIELDS, ...params });
   const r = await req(`${API}/files/${id}?${p}`, {
     method: 'PATCH',
@@ -126,11 +129,17 @@ export async function saveContent(id: string, content: Blob) {
   return remember((await r.json()) as DFile);
 }
 
-export async function createTextFile(name: string, parent: string, content: string, mimeType: string) {
+export async function createTextFile(
+  name: string,
+  parent: string,
+  content: string,
+  mimeType: string,
+  appProperties?: Record<string, string>,
+) {
   const boundary = 'facu' + Math.random().toString(36).slice(2);
   const body =
     `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
-    JSON.stringify({ name, parents: [parent], mimeType }) +
+    JSON.stringify({ name, parents: [parent], mimeType, appProperties }) +
     `\r\n--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n${content}\r\n--${boundary}--`;
   const r = await req(`${UPLOAD}/files?uploadType=multipart&fields=${FIELDS}`, {
     method: 'POST',

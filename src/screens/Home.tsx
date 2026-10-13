@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import FileRow from '../components/FileRow';
-import { Folder as FolderIcon, Plus, SearchIcon, Pencil, Trash } from '../components/icons';
+import { Check, Folder as FolderIcon, Plus, SearchIcon, Pencil, Trash } from '../components/icons';
+import { UpcomingExams } from '../components/Exams';
 import UploadSheet from '../components/UploadSheet';
 import { itemsFromDrop, itemsFromInput, summarize, type UploadItem } from '../lib/upload';
 import UserMenu from '../components/UserMenu';
@@ -68,6 +69,8 @@ export default function Home() {
         Buscar en todos tus apuntes…
       </button>
 
+      <UpcomingExams />
+
       {tree.years.map((y) => (
         <section
           key={y.id}
@@ -99,7 +102,7 @@ export default function Home() {
             />
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {y.materias.map((m) => (
+            {y.materias.filter((m) => !m.aprobada).map((m) => (
               <button
                 key={m.id}
                 onClick={() => go(`/m/${m.id}`)}
@@ -143,6 +146,8 @@ export default function Home() {
       >
         <Plus /> Agregar {nextYearName(tree)}
       </Button>
+
+      <Approved />
 
       {recent.length > 0 && (
         <section className="mt-10">
@@ -193,6 +198,52 @@ export default function Home() {
         />
       )}
     </div>
+  );
+}
+
+// Materias aprobadas, plegadas al final para que el inicio muestre solo lo que se cursa.
+function Approved() {
+  const { tree } = useFacu();
+  const [open, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem('facu:aprobadas') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const list = tree.years.flatMap((y) => y.materias.filter((m) => m.aprobada).map((m) => ({ m, y })));
+  if (!list.length) return null;
+  const toggle = () => {
+    setOpen(!open);
+    try {
+      localStorage.setItem('facu:aprobadas', open ? '0' : '1');
+    } catch {}
+  };
+  return (
+    <section className="mt-10">
+      <button onClick={toggle} className="flex items-center gap-2 text-lg font-bold" aria-expanded={open}>
+        <span className={`transition ${open ? 'rotate-90' : ''}`}>›</span>
+        Aprobadas
+        <span className="text-sm font-semibold text-muted bg-sunken rounded-full px-2 py-0.5">{list.length}</span>
+      </button>
+      {open && (
+        <div className="flex gap-2 flex-wrap mt-3">
+          {list.map(({ m, y }) => (
+            <button
+              key={m.id}
+              onClick={() => go(`/m/${m.id}`)}
+              className="h-11 pl-2 pr-4 rounded-full bg-surface border border-line flex items-center gap-2 text-[15px] font-semibold hover:bg-sunken"
+            >
+              <span className="size-7 rounded-full grid place-items-center text-white" style={{ background: m.color }}>
+                <Check width={16} height={16} />
+              </span>
+              {m.name}
+              <span className="text-xs text-muted font-medium">{y.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 

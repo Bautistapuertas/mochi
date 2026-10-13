@@ -1,22 +1,40 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
-import FileTile, { DRAG_TYPE } from '../components/FileTile';
-import { Back, Camera, Draw, External, Folder as FolderIcon, Move, Pencil, Plus, Trash, UploadIcon } from '../components/icons';
+import { MateriaExams } from '../components/Exams';
+import FileTile, { DRAG_TYPE, type DragFile } from '../components/FileTile';
+import MoveModal from '../components/MoveModal';
+import {
+  Back,
+  Camera,
+  Check,
+  Close,
+  Draw,
+  External,
+  Folder as FolderIcon,
+  Move,
+  Pencil,
+  Plus,
+  SearchIcon,
+  Trash,
+  UploadIcon,
+} from '../components/icons';
 import UploadSheet from '../components/UploadSheet';
 import { Button, ConfirmModal, IconButton, Menu, PromptModal, Spinner, errorText, useToast, type MenuItem } from '../components/ui';
 import { CHANGED, notifyChanged, useFacu } from '../lib/context';
-import { createTextFile, list, move } from '../lib/drive';
+import { createTextFile, list, move, trash } from '../lib/drive';
 import {
   DRAWING_MIME,
   EMPTY_DRAWING,
   addFolder,
   folderPath,
   materiaFiles,
+  searchInMateria,
+  setAprobada,
   renameFolder,
   trashFolder,
   type FileItem,
   type Folder,
 } from '../lib/facu';
-import { cleanNames, naturalCompare } from '../lib/files';
+import { baseName, cleanNames, naturalCompare } from '../lib/files';
 import { go, openFile } from '../lib/router';
 import { itemsFromDrop, itemsFromInput, mergeSameName, type UploadItem } from '../lib/upload';
 
@@ -51,6 +69,16 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
   const [dragging, setDragging] = useState(false);
   const [modal, setModal] = useState<ModalKind | null>(null);
   const [sort, setSort] = useState<Sort>(readSort);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectMode, setSelectMode] = useState(false);
+  const selecting = selectMode || selected.size > 0;
+  const clearSelection = () => {
+    setSelected(new Set());
+    setSelectMode(false);
+  };
+  const [query, setQuery] = useState('');
+  const [contentHits, setContentHits] = useState<FileItem[] | null>(null);
+  const [bulk, setBulk] = useState<'move' | 'delete' | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
@@ -75,6 +103,39 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
     addEventListener(CHANGED, load);
     return () => removeEventListener(CHANGED, load);
   }, [load]);
+
+  // Al cambiar de carpeta se limpia la selección.
+  useEffect(() => {
+    setSelected(new Set());
+    setSelectMode(false);
+  }, [current?.id]);
+
+  // Además del nombre, busca adentro de los PDF y Word de la materia.
+  useEffect(() => {
+    const text = query.trim();
+    setContentHits(null);
+    if (!m || text.length < 3) return;
+    let alive = true;
+    const t = setTimeout(() => {
+      searchInMateria(tree, m, text).then(
+        (r) => alive && setContentHits(r),
+        () => alive && setContentHits([]),
+      );
+    }, 400);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [query, tree, m]);
+
+  const results = useMemo(() => {
+    const text = norm(query.trim());
+    if (!text) return null;
+    const byName = (files ?? []).filter((f) => norm(f.name).includes(text));
+    const seen = new Set(byName.map((f) => f.id));
+    const byContent = (contentHits ?? []).filter((f) => !seen.has(f.id));
+    return { byName, byContent };
+  }, [query, files, contentHits]);
 
   // Cantidad de archivos por carpeta, contando las subcarpetas.
   const counts = useMemo(() => {
@@ -120,16 +181,45 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
     if (items.length) setPicked(items);
   };
 
-  const moveTo = async (d: DragData, targetId: string, targetName: string) => {
-    if (d.parents.includes(targetId)) return;
+  const moveTo = async (list: DragFile[], targetId: string, targetName: string) => {
+    const todo = list.filter((d) => !d.parents.includes(targetId));
+    if (!todo.length) return;
     try {
-      await move(d.id, d.parents, targetId);
-      toast(`Movido a ${targetName}`);
-      notifyChanged();
+      for (const d of todo) await move(d.id, d.parents, targetId);
+      toast(todo.length === 1 ? `Movido a ${targetName}` : `${todo.length} archivos movidos a ${targetName}`);
+      clearSelection();
     } catch (e) {
       toast(errorText(e));
+    } finally {
+      notifyChanged();
     }
   };
+
+  const toggle = (fid: string) =>
+    setSelected((s) => {
+      const n = new Set(s);
+      if (n.has(fid)) n.delete(fid);
+      else n.add(fid);
+      return n;
+    });
+  const selectedFiles = (files ?? []).filter((f) => selected.has(f.id));
+  // Si arrastrás uno de los seleccionados, se mueven todos.
+  const dragFor = (f: FileItem) => () =>
+    (selected.has(f.id) ? selectedFiles : [f]).map((x) => ({ id: x.id, parents: x.parents ?? [] }));
+
+  const tile = (f: FileItem, code: string | undefined, title: string, subtitle?: string) => (
+    <FileTile
+      key={f.id}
+      file={f}
+      code={code}
+      title={title}
+      subtitle={subtitle}
+      selected={selected.has(f.id)}
+      selecting={selecting}
+      onToggle={() => toggle(f.id)}
+      dragFiles={dragFor(f)}
+    />
+  );
 
   const changeSort = (s: Sort) => {
     setSort(s);
@@ -147,6 +237,19 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
         ]
       : []),
     { label: 'Ver en Google Drive', icon: <External />, onClick: () => open(`https://drive.google.com/drive/folders/${destId}`, '_blank') },
+    {
+      label: m.aprobada ? 'Volver a cursando' : 'Marcar como aprobada',
+      icon: <Check />,
+      onClick: async () => {
+        try {
+          await setAprobada(m, !m.aprobada);
+          await reload();
+          toast(m.aprobada ? `${m.name} volvió a cursando` : `¡Felicitaciones! ${m.name} aprobada 🎉`);
+        } catch (e) {
+          toast(errorText(e));
+        }
+      },
+    },
     { label: 'Renombrar materia', icon: <Pencil />, onClick: () => setModal('rename-materia') },
     { label: 'Eliminar materia', icon: <Trash />, danger: true, onClick: () => setModal('delete-materia') },
   ];
@@ -185,7 +288,7 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
           {(over) => (
         <button
           onClick={() => openFolder()}
-          className={`flex items-center gap-3 mb-5 text-left rounded-2xl -m-2 p-2 transition ${over ? 'bg-accent-soft ring-2 ring-accent' : ''}`}
+          className={`flex items-center gap-3 mb-3 text-left rounded-2xl -m-2 p-2 transition ${over ? 'bg-accent-soft ring-2 ring-accent' : ''}`}
         >
           <span
             className="size-11 rounded-2xl grid place-items-center text-white text-lg font-extrabold shrink-0"
@@ -198,6 +301,14 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
         </button>
           )}
         </DropTarget>
+
+        {m.aprobada ? (
+          <p className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full bg-accent-soft text-accent text-sm font-bold mb-5">
+            <Check width={16} height={16} /> Aprobada
+          </p>
+        ) : (
+          <MateriaExams materiaId={m.id} />
+        )}
 
         <div className="flex gap-2 flex-wrap">
           <Button variant="primary" onClick={() => fileInput.current?.click()} className="flex-1 sm:flex-none">
@@ -222,14 +333,61 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
         <input ref={folderInput} type="file" multiple hidden onChange={pickInput} />
         <input ref={cameraInput} type="file" accept="image/*" capture="environment" hidden onChange={pickInput} />
 
+        <div className="mt-6 flex items-center gap-2 h-11 px-4 rounded-2xl bg-surface border border-line focus-within:border-accent">
+          <SearchIcon className="text-muted shrink-0" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
+            placeholder={`Buscar en ${m.name}…`}
+            className="flex-1 bg-transparent outline-none text-[15px] min-w-0"
+          />
+          {query && (
+            <button onClick={() => setQuery('')} aria-label="Borrar búsqueda" className="text-muted hover:text-ink">
+              <Close />
+            </button>
+          )}
+        </div>
+
         {files === null ? (
           <div className="py-16 grid place-items-center">
             <Spinner />
           </div>
+        ) : results ? (
+          <section className="mt-6">
+            {results.byName.length + results.byContent.length === 0 ? (
+              <p className="text-muted text-center py-8">
+                {contentHits === null && query.trim().length >= 3
+                  ? 'Buscando…'
+                  : `No encontramos nada con “${query.trim()}” en ${m.name}.`}
+              </p>
+            ) : (
+              <>
+                {results.byName.length > 0 && (
+                  <>
+                    <p className="text-sm text-muted font-medium mb-3">
+                      {results.byName.length} {results.byName.length === 1 ? 'archivo' : 'archivos'} con ese nombre
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                      {results.byName.map((f) => tile(f, undefined, baseName(f.name), placeLabel(f)))}
+                    </div>
+                  </>
+                )}
+                {results.byContent.length > 0 && (
+                  <>
+                    <p className="text-sm text-muted font-medium mb-3 mt-6">Lo mencionan adentro</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                      {results.byContent.map((f) => tile(f, undefined, baseName(f.name), placeLabel(f)))}
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </section>
         ) : (
           <>
             {/* Carpetas de la materia */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mt-7">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mt-5">
               {m.folders.map((f) => (
                 <FolderCard
                   key={f.id}
@@ -285,6 +443,13 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
                       {current ? '' : 'Archivos sueltos · '}
                       {here.list.length} {here.list.length === 1 ? 'archivo' : 'archivos'}
                     </p>
+                    <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => (selecting ? clearSelection() : setSelectMode(true))}
+                      className="h-10 px-3 rounded-xl text-sm font-semibold text-muted hover:text-ink hover:bg-sunken"
+                    >
+                      {selecting ? 'Listo' : 'Seleccionar'}
+                    </button>
                     <div className="flex bg-sunken rounded-xl p-1 text-sm font-semibold">
                       <SortButton on={sort === 'nombre'} onClick={() => changeSort('nombre')}>
                         En orden
@@ -293,11 +458,12 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
                         Recientes
                       </SortButton>
                     </div>
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                     {here.list.map((f) => {
                       const n = here.names.get(f.id)!;
-                      return <FileTile key={f.id} file={f} code={n.code} title={n.title} />;
+                      return tile(f, n.code, n.title);
                     })}
                   </div>
                 </>
@@ -323,6 +489,56 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
           </>
         )}
       </div>
+
+      {selecting && (
+        <div className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-3 pb-4 safe-bottom pointer-events-none">
+          <div className="pointer-events-auto flex items-center gap-1 bg-ink text-bg rounded-2xl shadow-xl p-1.5 pl-4 max-w-full">
+            <span className="font-semibold text-[15px] whitespace-nowrap mr-2">
+              {selected.size} {selected.size === 1 ? 'seleccionado' : 'seleccionados'}
+            </span>
+            <BarButton onClick={() => setSelected(new Set(here.list.map((f) => f.id)))}>Todos</BarButton>
+            <BarButton disabled={!selected.size} onClick={() => setBulk('move')}>
+              <Move width={18} height={18} /> Mover
+            </BarButton>
+            <BarButton disabled={!selected.size} onClick={() => setBulk('delete')}>
+              <Trash width={18} height={18} /> Eliminar
+            </BarButton>
+            <BarButton onClick={clearSelection} label="Cancelar selección">
+              <Close width={18} height={18} />
+            </BarButton>
+          </div>
+        </div>
+      )}
+      {bulk === 'move' && (
+        <MoveModal
+          files={selectedFiles}
+          initialMateria={m.id}
+          initialFolder={current?.id}
+          onClose={() => setBulk(null)}
+          onMoved={(moved, where) => {
+            toast(`${moved.length} ${moved.length === 1 ? 'archivo movido' : 'archivos movidos'} a ${where}`);
+            clearSelection();
+            notifyChanged();
+          }}
+        />
+      )}
+      {bulk === 'delete' && (
+        <ConfirmModal
+          title={`¿Eliminar ${selected.size} ${selected.size === 1 ? 'archivo' : 'archivos'}?`}
+          text="Van a la papelera de Google Drive. Podés recuperarlos desde ahí durante 30 días."
+          action="Eliminar"
+          onClose={() => setBulk(null)}
+          onConfirm={async () => {
+            try {
+              for (const f of selectedFiles) await trash(f.id);
+              toast(`${selectedFiles.length} en la papelera de Drive`);
+              clearSelection();
+            } finally {
+              notifyChanged();
+            }
+          }}
+        />
+      )}
 
       {dragging && (
         <div className="fixed inset-3 z-40 rounded-3xl border-4 border-dashed border-accent bg-accent-soft/80 grid place-items-center pointer-events-none">
@@ -463,7 +679,7 @@ function FolderCard({
   selected?: boolean;
   small?: boolean;
   onClick: () => void;
-  onFileDrop: (d: DragData) => void;
+  onFileDrop: (d: DragFile[]) => void;
 }) {
   return (
     <DropTarget onFile={onFileDrop}>
@@ -497,10 +713,9 @@ function FolderCard({
   );
 }
 
-type DragData = { id: string; parents: string[] };
 
 // Recibe un cuadradito de archivo arrastrado. "contents" no altera la grilla.
-function DropTarget({ onFile, children }: { onFile: (d: DragData) => void; children: (over: boolean) => ReactNode }) {
+function DropTarget({ onFile, children }: { onFile: (d: DragFile[]) => void; children: (over: boolean) => ReactNode }) {
   const [over, setOver] = useState(false);
   return (
     <div
@@ -553,6 +768,36 @@ function EmptyDrop({ title, onClick }: { title: string; onClick: () => void }) {
       </p>
     </button>
   );
+}
+
+function BarButton({
+  onClick,
+  disabled,
+  label,
+  children,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  label?: string;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      className='h-10 px-3 rounded-xl text-sm font-semibold flex items-center gap-1.5 hover:bg-white/15 disabled:opacity-40 whitespace-nowrap'
+    >
+      {children}
+    </button>
+  );
+}
+
+const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
+
+// Dónde está un archivo dentro de la materia: 'Trabajos prácticos › TP1' o 'Sueltos'.
+function placeLabel(f: FileItem) {
+  return folderPath(f.folder).map((x) => x.name).join(' › ') || 'Suelto en la materia';
 }
 
 function SortButton({ on, onClick, children }: { on: boolean; onClick: () => void; children: ReactNode }) {

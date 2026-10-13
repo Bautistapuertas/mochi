@@ -1,9 +1,10 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
+import MoveModal from '../components/MoveModal';
 import { Back, Download, External, Move, Pencil, Trash } from '../components/icons';
-import { Button, ConfirmModal, FileBadge, IconButton, Menu, Modal, PromptModal, Spinner, errorText, useToast } from '../components/ui';
+import { Button, ConfirmModal, FileBadge, IconButton, Menu, PromptModal, Spinner, errorText, useToast } from '../components/ui';
 import { notifyChanged, useFacu } from '../lib/context';
-import { download, fileCache, getFile, move, rename, saveContent, trash, type DFile } from '../lib/drive';
-import { DRAWING_MIME, folderPath, itemOf, materiaFolders, whereLabel } from '../lib/facu';
+import { download, fileCache, getFile, rename, saveContent, trash, type DFile } from '../lib/drive';
+import { DRAWING_MIME, itemOf, whereLabel } from '../lib/facu';
 import { baseName, canPreview, extOf, kindOf, saveBlob } from '../lib/files';
 import { closeFile } from '../lib/router';
 
@@ -153,12 +154,12 @@ export default function Viewer({ id }: { id: string }) {
       )}
       {file && modal === 'move' && (
         <MoveModal
-          file={file}
+          files={[file]}
           initialMateria={item?.materia.id}
           initialFolder={item?.folder?.id}
           onClose={() => setModal(null)}
-          onMoved={(f, where) => {
-            setFile(f);
+          onMoved={(moved, where) => {
+            if (moved[0]) setFile(moved[0]);
             notifyChanged();
             toast(`Movido a ${where}`);
           }}
@@ -184,88 +185,4 @@ export default function Viewer({ id }: { id: string }) {
 
 function Center({ children }: { children: React.ReactNode }) {
   return <div className="h-full min-h-60 flex flex-col items-center justify-center text-center p-6">{children}</div>;
-}
-
-function MoveModal({
-  file,
-  initialMateria,
-  initialFolder,
-  onClose,
-  onMoved,
-}: {
-  file: DFile;
-  initialMateria?: string;
-  initialFolder?: string;
-  onClose: () => void;
-  onMoved: (f: DFile, where: string) => void;
-}) {
-  const { tree } = useFacu();
-  const [materiaId, setMateriaId] = useState(initialMateria ?? tree.years[0]?.materias[0]?.id ?? '');
-  // '' = suelto en la materia, sin carpeta.
-  const [folderId, setFolderId] = useState(initialFolder ?? '');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const unchanged = materiaId === initialMateria && folderId === (initialFolder ?? '');
-  const materia = tree.materias.get(materiaId);
-  const options = materia ? materiaFolders(materia) : [];
-
-  return (
-    <Modal title="Mover archivo" onClose={onClose}>
-      <p className="font-semibold mb-2">Materia</p>
-      <select
-        value={materiaId}
-        onChange={(e) => {
-          setMateriaId(e.target.value);
-          setFolderId('');
-        }}
-        className="w-full h-12 px-3 rounded-xl bg-sunken outline-none text-base mb-4"
-      >
-        {tree.years.map((y) => (
-          <optgroup key={y.id} label={y.name}>
-            {y.materias.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </optgroup>
-        ))}
-      </select>
-      <p className="font-semibold mb-2">Carpeta</p>
-      <select
-        value={folderId}
-        onChange={(e) => setFolderId(e.target.value)}
-        className="w-full h-12 px-3 rounded-xl bg-sunken outline-none text-base"
-      >
-        <option value="">Sin carpeta (suelto en la materia)</option>
-        {options.map((f) => (
-          <option key={f.id} value={f.id}>
-            {folderPath(f)
-              .map((x) => x.name)
-              .join(' › ')}
-          </option>
-        ))}
-      </select>
-      {error && <p className="text-danger mt-3">{error}</p>}
-      <Button
-        variant="primary"
-        className="w-full mt-5"
-        disabled={busy || unchanged || !materiaId}
-        onClick={async () => {
-          if (!materia) return;
-          setBusy(true);
-          try {
-            const target = tree.folders.get(folderId);
-            const f = await move(file.id, file.parents ?? [], target?.id ?? materia.id);
-            onMoved(f, whereLabel({ materia, folder: target }));
-            onClose();
-          } catch (e) {
-            setError(errorText(e));
-            setBusy(false);
-          }
-        }}
-      >
-        {busy ? 'Moviendo…' : 'Mover'}
-      </Button>
-    </Modal>
-  );
 }
