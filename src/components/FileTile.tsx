@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import type { FileItem } from '../lib/facu';
 import { KIND_STYLE, fmtDate, kindOf } from '../lib/files';
 import { openFile } from '../lib/router';
-import { Check } from './icons';
+import { Check, Offline } from './icons';
 
 // Para arrastrar archivos a una carpeta dentro de la app.
 export const DRAG_TYPE = 'application/x-mochi-files';
@@ -17,6 +17,7 @@ export default function FileTile({
   subtitle,
   selected = false,
   selecting = false,
+  offline = false,
   onToggle,
   dragFiles,
 }: {
@@ -26,6 +27,8 @@ export default function FileTile({
   subtitle?: string;
   selected?: boolean;
   selecting?: boolean;
+  // Guardado para ver sin internet en este dispositivo.
+  offline?: boolean;
   onToggle?: () => void;
   // Qué se arrastra: este archivo, o todos los seleccionados.
   dragFiles?: () => DragFile[];
@@ -94,6 +97,14 @@ export default function FileTile({
               style={{ background: s.color }}
             >
               {s.label}
+            </span>
+          )}
+          {offline && (
+            <span
+              title="Disponible sin conexión"
+              className="absolute bottom-2 left-2 size-6 rounded-lg bg-surface/95 text-ink grid place-items-center shadow-sm"
+            >
+              <Offline width={15} height={15} />
             </span>
           )}
           {selected && <span className="absolute inset-0 bg-accent/15" />}

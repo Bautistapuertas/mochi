@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { MateriaExams } from '../components/Exams';
+import { ApproveModal, MateriaGrades } from '../components/Grades';
+import { fmtNota } from '../lib/datos';
 import FileTile, { DRAG_TYPE, type DragFile } from '../components/FileTile';
 import MoveModal from '../components/MoveModal';
 import {
@@ -10,6 +12,7 @@ import {
   External,
   Folder as FolderIcon,
   Move,
+  Offline,
   Pencil,
   Plus,
   SearchIcon,
@@ -20,6 +23,8 @@ import UploadSheet from '../components/UploadSheet';
 import { Button, ConfirmModal, IconButton, Menu, PromptModal, Spinner, errorText, useToast, type MenuItem } from '../components/ui';
 import { CHANGED, notifyChanged, useFacu } from '../lib/context';
 import { list, move, trash } from '../lib/drive';
+import { keepOffline } from '../lib/fileBlob';
+import { offlineIds } from '../lib/offline';
 import {
   addFolder,
   folderPath,
@@ -52,7 +57,8 @@ type ModalKind =
   | 'rename-folder'
   | 'unwrap-folder'
   | 'delete-folder'
-  | 'new-folder';
+  | 'new-folder'
+  | 'approve';
 
 export default function MateriaScreen({ id, folderId }: { id: string; folderId?: string }) {
   const { tree, reload } = useFacu();
@@ -75,6 +81,7 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
   const [query, setQuery] = useState('');
   const [contentHits, setContentHits] = useState<FileItem[] | null>(null);
   const [bulk, setBulk] = useState<'move' | 'delete' | null>(null);
+  const [offline, setOffline] = useState<Set<string>>(new Set());
   const fileInput = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
@@ -86,6 +93,7 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
 
   const load = useCallback(async () => {
     if (!m) return;
+    offlineIds().then(setOffline);
     try {
       setFiles(await materiaFiles(tree, m));
     } catch (e) {
@@ -212,10 +220,27 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
       subtitle={subtitle}
       selected={selected.has(f.id)}
       selecting={selecting}
+      offline={offline.has(f.id)}
       onToggle={() => toggle(f.id)}
       dragFiles={dragFor(f)}
     />
   );
+
+  async function saveSelectedOffline() {
+    const list = selectedFiles;
+    try {
+      for (let i = 0; i < list.length; i++) {
+        toast(`Guardando sin conexión ${i + 1} de ${list.length}…`);
+        await keepOffline(list[i]);
+      }
+      toast(`Listo: ${list.length} ${list.length === 1 ? 'archivo disponible' : 'archivos disponibles'} sin internet`);
+      clearSelection();
+    } catch (e) {
+      toast(errorText(e));
+    } finally {
+      offlineIds().then(setOffline);
+    }
+  }
 
   const changeSort = (s: Sort) => {
     setSort(s);
@@ -237,10 +262,11 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
       label: m.aprobada ? 'Volver a cursando' : 'Marcar como aprobada',
       icon: <Check />,
       onClick: async () => {
+        if (!m.aprobada) return setModal('approve');
         try {
-          await setAprobada(m, !m.aprobada);
+          await setAprobada(m, false);
           await reload();
-          toast(m.aprobada ? `${m.name} volvió a cursando` : `¡Felicitaciones! ${m.name} aprobada 🎉`);
+          toast(`${m.name} volvió a cursando`);
         } catch (e) {
           toast(errorText(e));
         }
@@ -299,12 +325,17 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
         </DropTarget>
 
         {m.aprobada ? (
-          <p className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full bg-accent-soft text-accent text-sm font-bold mb-5">
-            <Check width={16} height={16} /> Aprobada
-          </p>
+          <button
+            onClick={() => setModal('approve')}
+            title="Cambiar nota final"
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full bg-accent-soft text-accent text-sm font-bold mb-5"
+          >
+            <Check width={16} height={16} /> Aprobada{m.nota !== undefined && ` con ${fmtNota(m.nota)}`}
+          </button>
         ) : (
           <MateriaExams materiaId={m.id} />
         )}
+        <MateriaGrades materiaId={m.id} />
 
         <div className="flex gap-2 flex-wrap">
           <Button variant="primary" onClick={() => fileInput.current?.click()} className="flex-1 sm:flex-none">
@@ -483,15 +514,20 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
         )}
       </div>
 
+      {modal === 'approve' && <ApproveModal materia={m} onClose={() => setModal(null)} />}
       {selecting && (
         <div className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-3 pb-4 safe-bottom pointer-events-none">
           <div className="pointer-events-auto flex items-center gap-1 bg-ink text-bg rounded-2xl shadow-xl p-1.5 pl-4 max-w-full">
             <span className="font-semibold text-[15px] whitespace-nowrap mr-2">
-              {selected.size} {selected.size === 1 ? 'seleccionado' : 'seleccionados'}
+              {selected.size}
+              <span className="hidden sm:inline"> {selected.size === 1 ? 'seleccionado' : 'seleccionados'}</span>
             </span>
             <BarButton onClick={() => setSelected(new Set(here.list.map((f) => f.id)))}>Todos</BarButton>
             <BarButton disabled={!selected.size} onClick={() => setBulk('move')}>
               <Move width={18} height={18} /> Mover
+            </BarButton>
+            <BarButton disabled={!selected.size} onClick={saveSelectedOffline}>
+              <Offline width={18} height={18} /> <span className="hidden sm:inline">Sin conexión</span>
             </BarButton>
             <BarButton disabled={!selected.size} onClick={() => setBulk('delete')}>
               <Trash width={18} height={18} /> Eliminar

@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useFacu } from '../lib/context';
-import { dateLabel, daysUntil, toISO, updateDatos, whenLabel, type Exam } from '../lib/datos';
+import { calendarLink, dateLabel, daysUntil, toISO, updateDatos, whenLabel, type Exam } from '../lib/datos';
 import { upcomingExams } from '../lib/facu';
-import { Plus } from './icons';
+import { Calendar, Check, Plus } from './icons';
 import { Button, Modal, errorText } from './ui';
 
 const SUGGESTIONS = ['Parcial 1', 'Parcial 2', 'Recuperatorio', 'Final', 'Entrega TP'];
@@ -16,24 +16,58 @@ export function ExamModal({ exam, materiaId, onClose }: { exam?: Exam; materiaId
   const [date, setDate] = useState(exam?.date ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [saved, setSaved] = useState<Exam | null>(null);
 
   async function save(remove = false) {
     if (!remove && (!title.trim() || !date || !mid)) return setError('Completá qué es y la fecha.');
     setBusy(true);
     setError('');
     try {
+      const next: Exam = { id: exam?.id ?? crypto.randomUUID(), materiaId: mid, title: title.trim(), date };
       await updateDatos(tree.rootId, (d) => {
         d.exams = d.exams.filter((e) => e.id !== exam?.id);
-        if (!remove) d.exams.push({ id: exam?.id ?? crypto.randomUUID(), materiaId: mid, title: title.trim(), date });
+        if (!remove) d.exams.push(next);
         // De paso, limpia fechas viejas de hace más de un mes.
         d.exams = d.exams.filter((e) => daysUntil(e.date) > -30);
       });
       await reload();
-      onClose();
+      if (remove) onClose();
+      else setSaved(next);
     } catch (e) {
       setError(errorText(e));
       setBusy(false);
     }
+  }
+
+  if (saved) {
+    const materia = tree.materias.get(saved.materiaId);
+    return (
+      <Modal title="Fecha guardada" onClose={onClose}>
+        <div className="flex items-center gap-3 mb-4">
+          <span className="size-10 rounded-full bg-accent-soft text-accent grid place-items-center shrink-0">
+            <Check />
+          </span>
+          <p>
+            <b>{saved.title}</b> de {materia?.name}, {dateLabel(saved.date)}.
+          </p>
+        </div>
+        <p className="text-muted text-[15px]">
+          ¿Querés que te avise antes? Agregala a tu Google Calendar y te llega la notificación al celu.
+        </p>
+        <a
+          href={calendarLink(saved, materia?.name ?? '')}
+          target="_blank"
+          rel="noreferrer"
+          onClick={() => setTimeout(onClose, 300)}
+          className="mt-5 h-11 w-full rounded-xl bg-accent text-on-accent font-semibold flex items-center justify-center gap-2 hover:brightness-110"
+        >
+          <Calendar /> Agregar a Google Calendar
+        </a>
+        <Button className="w-full mt-2" onClick={onClose}>
+          No, gracias
+        </Button>
+      </Modal>
+    );
   }
 
   return (
@@ -95,6 +129,16 @@ export function ExamModal({ exam, materiaId, onClose }: { exam?: Exam; materiaId
         />
 
         {error && <p className="text-danger mt-3 text-[15px]">{error}</p>}
+        {exam && (
+          <a
+            href={calendarLink(exam, tree.materias.get(exam.materiaId)?.name ?? '')}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-muted hover:text-ink"
+          >
+            <Calendar width={16} height={16} /> Agregar a Google Calendar
+          </a>
+        )}
         <div className="flex gap-3 mt-5">
           {exam && (
             <Button type="button" variant="ghost" className="text-danger" disabled={busy} onClick={() => save(true)}>

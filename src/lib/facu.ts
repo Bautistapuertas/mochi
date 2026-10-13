@@ -3,7 +3,7 @@
 // Año y materia se marcan con appProperties (así no importa si se renombran).
 // Adentro de la materia, las carpetas son libres y pueden tener subcarpetas.
 
-import { loadDatos, daysUntil, type Exam } from './datos';
+import { loadDatos, daysUntil, type Exam, type Grade } from './datos';
 import { createFolder, escapeQuery, FOLDER, list, rename, trash, update, type DFile } from './drive';
 
 export const YEAR_NAMES = ['1er año', '2do año', '3er año', '4to año', '5to año', '6to año', '7mo año'];
@@ -16,6 +16,8 @@ export type Materia = {
   color: string;
   yearId: string;
   aprobada: boolean;
+  // Nota final, si se cargó al aprobarla.
+  nota?: number;
   folders: Folder[];
 };
 export type Year = { id: string; name: string; order: number; materias: Materia[] };
@@ -27,6 +29,7 @@ export type Tree = {
   // Todas las carpetas que están adentro de alguna materia (a cualquier profundidad).
   folders: Map<string, Folder>;
   exams: Exam[];
+  grades: Grade[];
 };
 // folder vacío = archivo suelto en la materia.
 export type FileItem = DFile & { materia: Materia; folder?: Folder };
@@ -54,6 +57,7 @@ export async function loadTree(): Promise<Tree> {
       color: f.appProperties.color ?? COLORS[0],
       yearId: year.id,
       aprobada: f.appProperties.estado === 'aprobada',
+      nota: f.appProperties.nota ? Number(f.appProperties.nota) : undefined,
       folders: [],
     };
     materias.set(m.id, m);
@@ -93,7 +97,7 @@ export async function loadTree(): Promise<Tree> {
   for (const f of folders.values()) f.children.sort(byName);
 
   const datos = await loadDatos(root.id);
-  return { rootId: root.id, rootLink: root.webViewLink, years, materias, folders, exams: datos.exams };
+  return { rootId: root.id, rootLink: root.webViewLink, years, materias, folders, exams: datos.exams, grades: datos.grades ?? [] };
 }
 
 const yearName = (index: number) => YEAR_NAMES[index] ?? `Año ${index + 1}`;
@@ -107,8 +111,16 @@ export async function addMateria(year: Year, name: string, color: string) {
   return createFolder(name.trim(), year.id, { facu: 'materia', color });
 }
 
-export const setAprobada = (m: Materia, aprobada: boolean) =>
-  update(m.id, { appProperties: { estado: aprobada ? 'aprobada' : null } });
+export const setAprobada = (m: Materia, aprobada: boolean, nota?: number) =>
+  update(m.id, {
+    appProperties: { estado: aprobada ? 'aprobada' : null, nota: aprobada && nota !== undefined ? String(nota) : null },
+  });
+
+// Promedio de la carrera con las notas finales cargadas.
+export function promedio(tree: Tree) {
+  const notas = [...tree.materias.values()].filter((m) => m.aprobada && m.nota !== undefined).map((m) => m.nota!);
+  return notas.length ? { valor: notas.reduce((a, b) => a + b, 0) / notas.length, cantidad: notas.length } : null;
+}
 
 // Fechas que todavía no pasaron, de materias que se están cursando, la más cercana primero.
 export function upcomingExams(tree: Tree, materiaId?: string) {

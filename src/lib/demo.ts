@@ -15,7 +15,7 @@ export const demoFolders: DFile[] = [
   folder('root', 'Facultad', 'x', { facu: 'root' }),
   folder('y3', '3er año', 'root', { facu: 'year', order: '3' }),
   folder('m1', 'Desarrollo de Software', 'y3', { facu: 'materia', color: '#4c6ef5' }),
-  folder('m2', 'Análisis Matemático II', 'y3', { facu: 'materia', color: '#12b886', estado: 'aprobada' }),
+  folder('m2', 'Análisis Matemático II', 'y3', { facu: 'materia', color: '#12b886', estado: 'aprobada', nota: '8.5' }),
   folder('m3', 'Sistemas Operativos', 'y3', { facu: 'materia', color: '#f59f00' }),
   folder('c-teo', 'Presentaciones dadas en clase', 'm1', { facu: 'cat', cat: 'teoria' }),
   folder('c-par', 'Promoción', 'm1', { facu: 'cat', cat: 'parciales' }),

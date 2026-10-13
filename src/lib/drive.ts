@@ -1,5 +1,7 @@
 // Acceso a Google Drive. Solo ve los archivos que creó esta app (permiso drive.file).
 
+import { getList, isNetworkError, putList } from './offline';
+
 const API = 'https://www.googleapis.com/drive/v3';
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
 export const FOLDER = 'application/vnd.google-apps.folder';
@@ -23,7 +25,21 @@ export class AuthError extends Error {}
 
 let cached: { token: string; exp: number } | null = null;
 let pending: Promise<string> | null = null;
-export let currentUser: User | null = null;
+export let currentUser: User | null = (() => {
+  try {
+    return JSON.parse(localStorage.getItem('mochi:user') ?? 'null');
+  } catch {
+    return null;
+  }
+})();
+
+// true cuando se está mostrando lo guardado porque no hay internet.
+export let offlineMode = false;
+function setOffline(v: boolean) {
+  if (v === offlineMode) return;
+  offlineMode = v;
+  dispatchEvent(new Event('mochi:offline'));
+}
 
 // Archivos ya vistos, para abrirlos al instante en el visor.
 export const fileCache = new Map<string, DFile>();
@@ -37,6 +53,9 @@ export function getToken(): Promise<string> {
     const j = await r.json();
     cached = { token: j.access_token, exp: Date.now() + j.expires_in * 1000 };
     currentUser = j.user;
+    try {
+      localStorage.setItem('mochi:user', JSON.stringify(j.user));
+    } catch {}
     return cached.token;
   })().finally(() => (pending = null));
   return pending;
@@ -71,22 +90,36 @@ export async function list(q: string, opts: { orderBy?: string; pageSize?: numbe
     currentUser = { email: 'demo@demo', name: 'Demo' };
     return remember((await import('./demo')).demoList(q));
   }
-  const out: DFile[] = [];
-  let pageToken: string | undefined;
-  do {
-    const p = new URLSearchParams({
-      q,
-      fields: `nextPageToken,files(${FIELDS})`,
-      pageSize: String(opts.pageSize ?? 1000),
-      spaces: 'drive',
-    });
-    if (opts.orderBy) p.set('orderBy', opts.orderBy);
-    if (pageToken) p.set('pageToken', pageToken);
-    const r: { files: DFile[]; nextPageToken?: string } = await (await req(`${API}/files?${p}`)).json();
-    out.push(...r.files);
-    pageToken = opts.firstPageOnly ? undefined : r.nextPageToken;
-  } while (pageToken);
-  return remember(out);
+  const key = JSON.stringify([q, opts.orderBy ?? '', opts.pageSize ?? 0]);
+  try {
+    const out: DFile[] = [];
+    let pageToken: string | undefined;
+    do {
+      const p = new URLSearchParams({
+        q,
+        fields: `nextPageToken,files(${FIELDS})`,
+        pageSize: String(opts.pageSize ?? 1000),
+        spaces: 'drive',
+      });
+      if (opts.orderBy) p.set('orderBy', opts.orderBy);
+      if (pageToken) p.set('pageToken', pageToken);
+      const r: { files: DFile[]; nextPageToken?: string } = await (await req(`${API}/files?${p}`)).json();
+      out.push(...r.files);
+      pageToken = opts.firstPageOnly ? undefined : r.nextPageToken;
+    } while (pageToken);
+    setOffline(false);
+    putList(key, out);
+    return remember(out);
+  } catch (e) {
+    // Sin internet: se usa lo último que se vio.
+    if (!(e instanceof AuthError) && isNetworkError(e)) {
+      const saved = await getList<DFile[]>(key);
+      setOffline(true);
+      if (saved) return remember(saved);
+      throw new Error('Sin conexión. Esto todavía no se abrió con internet, así que no está guardado.');
+    }
+    throw e;
+  }
 }
 
 export async function getFile(id: string) {

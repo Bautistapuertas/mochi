@@ -56,9 +56,24 @@ export default defineConfig(({ mode }) => {
           ],
         },
         workbox: {
-          globPatterns: ['index.html', 'assets/index-*.{js,css}', '*.{svg,png}'],
+          // La app y los visores de PDF, Word, Excel e imágenes quedan guardados para abrir sin internet.
+          // El editor de Excalidraw (muy pesado) se guarda recién la primera vez que se usa.
+          globPatterns: [
+            'index.html',
+            'assets/index-*.{js,css}',
+            'assets/rolldown-runtime-*.js',
+            'assets/{PdfView,SheetView,DocxView,ImageView}-*.js',
+            'assets/pdf.worker*.mjs',
+            '*.{svg,png,ico}',
+          ],
+          maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
           navigateFallbackDenylist: [/^\/api\//, /^\/privacidad/],
           runtimeCaching: [
+            {
+              urlPattern: ({ url }) => url.origin === 'https://fonts.googleapis.com' || url.origin === 'https://fonts.gstatic.com',
+              handler: 'StaleWhileRevalidate',
+              options: { cacheName: 'fonts', expiration: { maxEntries: 20 } },
+            },
             {
               urlPattern: ({ url }) => url.origin === self.location.origin && url.pathname.startsWith('/assets/'),
               handler: 'CacheFirst',

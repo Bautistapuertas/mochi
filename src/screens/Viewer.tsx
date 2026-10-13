@@ -1,9 +1,11 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import MoveModal from '../components/MoveModal';
-import { Back, Download, External, Move, Pencil, Trash } from '../components/icons';
+import { Back, Download, External, Move, Offline, Pencil, Trash } from '../components/icons';
 import { Button, ConfirmModal, FileBadge, IconButton, Menu, PromptModal, Spinner, errorText, useToast } from '../components/ui';
 import { notifyChanged, useFacu } from '../lib/context';
-import { download, fileCache, getFile, rename, saveContent, trash, type DFile } from '../lib/drive';
+import { fileCache, getFile, rename, saveContent, trash, type DFile } from '../lib/drive';
+import { dropOffline, fileBlob, keepOffline, offlineMeta } from '../lib/fileBlob';
+import { offlineIds } from '../lib/offline';
 import { DRAWING_MIME, itemOf, whereLabel } from '../lib/facu';
 import { baseName, canPreview, extOf, kindOf, saveBlob } from '../lib/files';
 import { closeFile } from '../lib/router';
@@ -21,24 +23,54 @@ export default function Viewer({ id }: { id: string }) {
   const [blob, setBlob] = useState<Blob | null>(null);
   const [error, setError] = useState('');
   const [modal, setModal] = useState<'rename' | 'move' | 'delete' | null>(null);
+  const [isOffline, setIsOffline] = useState(false);
 
   useEffect(() => {
-    if (!file) getFile(id).then(setFile, (e) => setError(errorText(e)));
+    if (file) return;
+    getFile(id).then(setFile, async (e) => {
+      const meta = await offlineMeta(id);
+      if (meta) setFile(meta);
+      else setError(errorText(e));
+    });
   }, [id, file]);
+
+  useEffect(() => {
+    offlineIds().then((s) => setIsOffline(s.has(id)));
+  }, [id]);
 
   const fileId = file?.id;
   const previewable = !!file && canPreview(file);
   useEffect(() => {
-    if (!fileId || !previewable) return;
+    if (!file || !previewable) return;
     let alive = true;
-    download(fileId).then(
+    fileBlob(file).then(
       (b) => alive && setBlob(b),
       (e) => alive && setError(errorText(e)),
     );
     return () => {
       alive = false;
     };
+    // Solo cuando cambia el archivo, no cuando se renombra.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fileId, previewable]);
+
+  async function toggleOffline() {
+    if (!file) return;
+    try {
+      if (isOffline) {
+        await dropOffline(file.id);
+        setIsOffline(false);
+        toast('Ya no está guardado sin conexión');
+      } else {
+        await keepOffline(file);
+        setIsOffline(true);
+        toast('Guardado: lo podés abrir sin internet en este dispositivo');
+      }
+      notifyChanged();
+    } catch (e) {
+      toast(errorText(e));
+    }
+  }
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -60,7 +92,7 @@ export default function Viewer({ id }: { id: string }) {
   async function onDownload() {
     if (!file) return;
     try {
-      saveBlob(blob ?? (await download(file.id)), file.name);
+      saveBlob(blob ?? (await fileBlob(file)), file.name);
     } catch (e) {
       toast(errorText(e));
     }
@@ -126,6 +158,11 @@ export default function Viewer({ id }: { id: string }) {
             </IconButton>
             <Menu
               items={[
+                {
+                  label: isOffline ? 'Quitar de sin conexión' : 'Guardar sin conexión',
+                  icon: <Offline />,
+                  onClick: toggleOffline,
+                },
                 { label: 'Abrir en Google Drive', icon: <External />, onClick: openInDrive },
                 { label: 'Cambiar nombre', icon: <Pencil />, onClick: () => setModal('rename') },
                 { label: 'Mover a otra carpeta', icon: <Move />, onClick: () => setModal('move') },

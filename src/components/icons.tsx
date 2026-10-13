@@ -101,6 +101,12 @@ export const Folder = (p: P) => (
     <path d="M3 6h6l2 2h10v11H3z" />
   </Base>
 );
+export const Offline = (p: P) => (
+  <Base {...p}>
+    <path d="M7 18a4.5 4.5 0 0 1-.5-9 6 6 0 0 1 11.5 1.5A3.75 3.75 0 0 1 17.5 18z" />
+    <path d="M12 10.5v5M9.5 13.5l2.5 2.5 2.5-2.5" />
+  </Base>
+);
 export const Share = (p: P) => (
   <Base {...p}>
     <circle cx="18" cy="5" r="2.5" />
@@ -112,5 +118,11 @@ export const Share = (p: P) => (
 export const Logout = (p: P) => (
   <Base {...p}>
     <path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10" />
+  </Base>
+);
+export const Calendar = (p: P) => (
+  <Base {...p}>
+    <rect x="4" y="5" width="16" height="15" rx="2" />
+    <path d="M4 10h16M9 3v4M15 3v4" />
   </Base>
 );

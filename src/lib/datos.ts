@@ -2,11 +2,13 @@
 // Así se ven igual en la compu y en el celu.
 
 import { DEMO, createTextFile, download, list, saveContent } from './drive';
+import { getList, isNetworkError, putList } from './offline';
 
 export type Exam = { id: string; materiaId: string; title: string; date: string /* AAAA-MM-DD */ };
-export type Datos = { version: 1; exams: Exam[] };
+export type Grade = { id: string; materiaId: string; title: string; nota: number };
+export type Datos = { version: 1; exams: Exam[]; grades: Grade[] };
 
-const empty = (): Datos => ({ version: 1, exams: [] });
+const empty = (): Datos => ({ version: 1, exams: [], grades: [] });
 let fileId: string | null = null;
 let demoDatos: Datos | null = null;
 
@@ -19,6 +21,7 @@ function demoSample(): Datos {
       { id: 'e2', materiaId: 'm2', title: 'Entrega TP', date: inDays(9) },
       { id: 'e3', materiaId: 'm1', title: 'Final', date: inDays(40) },
     ],
+    grades: [{ id: 'g1', materiaId: 'm1', title: 'TP 1', nota: 9 }],
   };
 }
 
@@ -27,8 +30,18 @@ async function read(rootId: string): Promise<Datos> {
   const f = (await list(`'${rootId}' in parents and appProperties has { key='facu' and value='datos' } and trashed=false`))[0];
   if (!f) return empty();
   fileId = f.id;
+  let text: string;
   try {
-    return { ...empty(), ...JSON.parse(await (await download(f.id)).text()) };
+    text = await (await download(f.id)).text();
+  } catch (e) {
+    // Sin internet: la última copia que se leyó.
+    if (isNetworkError(e)) return (await getList<Datos>('datos')) ?? empty();
+    throw e;
+  }
+  try {
+    const d: Datos = { ...empty(), ...JSON.parse(text) };
+    putList('datos', d);
+    return d;
   } catch {
     return empty();
   }
@@ -71,3 +84,20 @@ export function dateLabel(iso: string) {
   const weekday = new Date(y, m - 1, d).toLocaleDateString('es-AR', { weekday: 'short' }).replace('.', '');
   return `${weekday} ${d}/${m}`;
 }
+
+// Link para agregar la fecha a Google Calendar (evento de todo el día). No necesita permisos:
+// se abre Calendar con todo completo y se guarda con un clic.
+export function calendarLink(e: Exam, materiaName: string) {
+  const [y, m, d] = e.date.split('-').map(Number);
+  const start = e.date.replace(/-/g, '');
+  const end = toISO(new Date(y, m - 1, d + 1)).replace(/-/g, '');
+  const p = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: `${e.title} · ${materiaName}`,
+    dates: `${start}/${end}`,
+    details: 'Cargado desde Mochi · https://mochi-facu.vercel.app',
+  });
+  return `https://calendar.google.com/calendar/render?${p}`;
+}
+
+export const fmtNota = (n: number) => String(Math.round(n * 100) / 100).replace('.', ',');

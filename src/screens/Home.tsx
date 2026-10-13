@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import FileRow from '../components/FileRow';
 import { Check, Folder as FolderIcon, Plus, SearchIcon, Pencil, Trash } from '../components/icons';
 import { UpcomingExams } from '../components/Exams';
+import { fmtNota } from '../lib/datos';
 import UploadSheet from '../components/UploadSheet';
 import { itemsFromDrop, itemsFromInput, summarize, type UploadItem } from '../lib/upload';
 import UserMenu from '../components/UserMenu';
@@ -13,6 +14,7 @@ import {
   addMateria,
   addYear,
   nextYearName,
+  promedio,
   recentFiles,
   renameFolder,
   trashFolder,
@@ -57,6 +59,7 @@ export default function Home() {
         <div>
           <p className="text-muted text-sm font-medium">Hola{firstName ? `, ${firstName}` : ''} 👋</p>
           <h1 className="text-2xl font-extrabold tracking-tight">Tus materias</h1>
+          <Stats />
         </div>
         <UserMenu />
       </header>
@@ -201,6 +204,24 @@ export default function Home() {
   );
 }
 
+// "8 aprobadas · promedio 7,85"
+function Stats() {
+  const { tree } = useFacu();
+  const aprobadas = [...tree.materias.values()].filter((m) => m.aprobada).length;
+  const p = promedio(tree);
+  if (!aprobadas) return null;
+  return (
+    <p className="text-sm text-muted mt-1">
+      {aprobadas} {aprobadas === 1 ? 'materia aprobada' : 'materias aprobadas'}
+      {p && (
+        <>
+          {' · '}promedio <span className="font-extrabold text-ink">{fmtNota(p.valor)}</span>
+        </>
+      )}
+    </p>
+  );
+}
+
 // Materias aprobadas, plegadas al final para que el inicio muestre solo lo que se cursa.
 function Approved() {
   const { tree } = useFacu();
@@ -238,6 +259,7 @@ function Approved() {
                 <Check width={16} height={16} />
               </span>
               {m.name}
+              {m.nota !== undefined && <span className="font-extrabold">{fmtNota(m.nota)}</span>}
               <span className="text-xs text-muted font-medium">{y.name}</span>
             </button>
           ))}
