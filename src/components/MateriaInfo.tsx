@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useFacu } from '../lib/context';
-import { fmtNota, whenLabel } from '../lib/datos';
+import { fmtNota, fmtPromedio, whenLabel } from '../lib/datos';
 import { ESTADOS, setEstado, upcomingExams, type Estado, type Materia } from '../lib/facu';
 import { MateriaExams } from './Exams';
 import { ApproveModal, MateriaGrades } from './Grades';
@@ -97,7 +97,7 @@ export function MateriaSummary({ m, onOpen }: { m: Materia; onOpen: () => void }
           {grades.length ? (
             <span>
               {grades.length} {grades.length === 1 ? 'nota' : 'notas'} · promedio{' '}
-              <b>{fmtNota(grades.reduce((a, g) => a + g.nota, 0) / grades.length)}</b>
+              <b>{fmtPromedio(grades.reduce((a, g) => a + g.nota, 0) / grades.length)}</b>
             </span>
           ) : (
             <span className="text-muted">Sin notas</span>

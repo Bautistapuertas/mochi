@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { ChevronRight, Folder, Logout, Share, Sun } from '../components/icons';
 import { useToast } from '../components/ui';
 import { useFacu } from '../lib/context';
-import { fmtNota } from '../lib/datos';
+import { fmtNota, fmtPromedio } from '../lib/datos';
 import { promedio } from '../lib/facu';
 import { go } from '../lib/router';
 import { getTheme, setTheme, type Theme } from '../lib/theme';
@@ -46,7 +46,7 @@ export default function YoScreen() {
       </header>
 
       <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-        <Stat value={p ? fmtNota(p.valor) : '—'} label="Promedio" accent />
+        <Stat value={p ? fmtPromedio(p.valor) : '—'} label="Promedio" accent />
         <Stat value={String(aprobadas.length)} label={aprobadas.length === 1 ? 'Aprobada' : 'Aprobadas'} />
         <Stat value={String(cursando.length)} label="Cursando" />
         <Stat value={String(finales.length)} label={finales.length === 1 ? 'Final pendiente' : 'Finales pendientes'} />

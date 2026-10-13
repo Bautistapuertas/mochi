@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import FileRow from '../components/FileRow';
 import { Check, ChevronRight, Folder as FolderIcon, Plus, SearchIcon, Pencil, Trash } from '../components/icons';
 import { UpcomingExams } from '../components/Exams';
-import { daysUntil, fmtNota, whenLabel } from '../lib/datos';
+import { daysUntil, fmtNota, fmtPromedio, whenLabel } from '../lib/datos';
 import UploadSheet from '../components/UploadSheet';
 import { itemsFromDrop, itemsFromInput, summarize, type UploadItem } from '../lib/upload';
 import { Button, ConfirmModal, Menu, Modal, PromptModal, Spinner, errorText, useToast } from '../components/ui';
@@ -375,7 +375,7 @@ function Stats() {
       {parts.join(' · ')}
       {p && (
         <>
-          {parts.length ? ' · ' : ''}promedio <span className="font-extrabold text-ink">{fmtNota(p.valor)}</span>
+          {parts.length ? ' · ' : ''}promedio <span className="font-extrabold text-ink">{fmtPromedio(p.valor)}</span>
         </>
       )}
     </p>

@@ -101,3 +101,6 @@ export function calendarLink(e: Exam, materiaName: string) {
 }
 
 export const fmtNota = (n: number) => String(Math.round(n * 100) / 100).replace('.', ',');
+
+// Los promedios siempre con 2 decimales: "8,50".
+export const fmtPromedio = (n: number) => n.toFixed(2).replace('.', ',');
