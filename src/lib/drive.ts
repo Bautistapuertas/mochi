@@ -154,6 +154,7 @@ export const move = (id: string, from: string[], to: string) =>
   update(id, {}, { addParents: to, removeParents: from.join(',') });
 
 export async function download(id: string) {
+  if (DEMO) return (await import('./demo')).demoBlob(id);
   return (await req(`${API}/files/${id}?alt=media`)).blob();
 }
 

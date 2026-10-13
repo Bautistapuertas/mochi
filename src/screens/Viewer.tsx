@@ -1,6 +1,6 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import MoveModal from '../components/MoveModal';
-import { Back, Download, External, Move, Offline, Pencil, Trash } from '../components/icons';
+import { Back, ChevronLeft, ChevronRight, Download, External, Move, Offline, Pencil, Trash } from '../components/icons';
 import { Button, ConfirmModal, FileBadge, IconButton, Menu, PromptModal, Spinner, errorText, useToast } from '../components/ui';
 import { notifyChanged, useFacu } from '../lib/context';
 import { fileCache, getFile, rename, saveContent, trash, type DFile } from '../lib/drive';
@@ -8,7 +8,7 @@ import { dropOffline, fileBlob, keepOffline, offlineMeta } from '../lib/fileBlob
 import { offlineIds } from '../lib/offline';
 import { DRAWING_MIME, itemOf, whereLabel } from '../lib/facu';
 import { baseName, canPreview, extOf, kindOf, saveBlob } from '../lib/files';
-import { closeFile } from '../lib/router';
+import { closeFile, getViewerList, switchFile } from '../lib/router';
 
 const PdfView = lazy(() => import('../viewers/PdfView'));
 const DocxView = lazy(() => import('../viewers/DocxView'));
@@ -80,11 +80,46 @@ export default function Viewer({ id }: { id: string }) {
     };
   }, []);
 
+  // Anterior y siguiente dentro de la carpeta (o búsqueda) desde la que se abrió.
+  const siblings = getViewerList();
+  const pos = siblings.indexOf(id);
+  const prevId = pos > 0 ? siblings[pos - 1] : undefined;
+  const nextId = pos >= 0 && pos < siblings.length - 1 ? siblings[pos + 1] : undefined;
+  const isDrawing = !!file && kindOf(file) === 'excalidraw';
+
   useEffect(() => {
-    const k = (e: KeyboardEvent) => e.key === 'Escape' && !modal && closeFile();
+    const k = (e: KeyboardEvent) => {
+      if (modal) return;
+      if (e.key === 'Escape') return closeFile();
+      // En los dibujos las flechas mueven cosas del dibujo.
+      if (isDrawing || /INPUT|TEXTAREA/.test((e.target as HTMLElement).tagName)) return;
+      if (e.key === 'ArrowLeft' && prevId) switchFile(prevId);
+      if (e.key === 'ArrowRight' && nextId) switchFile(nextId);
+    };
     addEventListener('keydown', k);
     return () => removeEventListener('keydown', k);
-  }, [modal]);
+  }, [modal, prevId, nextId, isDrawing]);
+
+  // Deslizar el dedo de costado para pasar de archivo.
+  const touch = useRef<{ x: number; y: number } | null>(null);
+  const swipe = {
+    onTouchStart: (e: React.TouchEvent) => {
+      touch.current = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+    },
+    onTouchEnd: (e: React.TouchEvent) => {
+      const t = touch.current;
+      touch.current = null;
+      if (!t || isDrawing) return;
+      const dx = e.changedTouches[0].clientX - t.x;
+      const dy = e.changedTouches[0].clientY - t.y;
+      if (Math.abs(dx) < 80 || Math.abs(dy) > 50) return;
+      // Si el contenido está con zoom y se puede mover de costado, el gesto es para eso.
+      const scroller = e.currentTarget as HTMLElement;
+      if (scroller.scrollWidth > scroller.clientWidth + 4) return;
+      if (dx > 0 && prevId) switchFile(prevId);
+      if (dx < 0 && nextId) switchFile(nextId);
+    },
+  };
 
   const item = file ? itemOf(tree, file) : null;
   const kind = file ? kindOf(file) : 'other';
@@ -151,6 +186,19 @@ export default function Viewer({ id }: { id: string }) {
             <div className="text-xs text-muted truncate">{whereLabel(item)}</div>
           )}
         </div>
+        {siblings.length > 1 && pos >= 0 && (
+          <div className="hidden sm:flex items-center gap-0.5 mr-1">
+            <IconButton label="Anterior" disabled={!prevId} onClick={() => prevId && switchFile(prevId)} className="disabled:opacity-30">
+              <ChevronLeft />
+            </IconButton>
+            <span className="text-xs text-muted tabular-nums w-14 text-center">
+              {pos + 1} de {siblings.length}
+            </span>
+            <IconButton label="Siguiente" disabled={!nextId} onClick={() => nextId && switchFile(nextId)} className="disabled:opacity-30">
+              <ChevronRight />
+            </IconButton>
+          </div>
+        )}
         {file && (
           <>
             <IconButton label="Descargar" onClick={onDownload}>
@@ -173,9 +221,17 @@ export default function Viewer({ id }: { id: string }) {
         )}
       </header>
 
-      <div className="flex-1 min-h-0 overflow-auto relative" data-scroll>
+      <div className="flex-1 min-h-0 overflow-auto relative fade-in" data-scroll {...swipe}>
         {body}
       </div>
+      {/* Celu: aviso de que se puede deslizar */}
+      {siblings.length > 1 && pos >= 0 && !isDrawing && (
+        <div className="sm:hidden absolute top-[calc(3.5rem+env(safe-area-inset-top)+8px)] inset-x-0 flex justify-center pointer-events-none">
+          <span key={id} className="hint-out text-[11px] font-semibold text-muted bg-surface/90 border border-line rounded-full px-2.5 py-0.5">
+            {pos + 1} de {siblings.length} · deslizá para cambiar
+          </span>
+        </div>
+      )}
 
       {file && modal === 'rename' && (
         <PromptModal

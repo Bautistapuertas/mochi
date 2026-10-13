@@ -42,8 +42,18 @@ npm run dev
 
 y abrí <http://localhost:5173>.
 
+## Qué tiene la app
+
+- **Inicio:** las materias que estás cursando (de cualquier año), finales pendientes, todas las materias por año y las aprobadas.
+- **Materia:** carpetas libres con subcarpetas, cuadraditos con vista previa, búsqueda adentro de los PDF y Word,
+  seleccionar varios archivos, mover arrastrando, fechas y notas de la materia.
+- **Fechas:** parciales, finales y entregas, con link para agregarlos a Google Calendar.
+- **Vos:** promedio, notas finales, tema claro u oscuro, invitar compañeros.
+- **Sin conexión:** los archivos que guardes con "Guardar sin conexión" se abren sin internet.
+
 ## Cosas para saber
 
 - Lo que borres va a la **papelera de Google Drive** y se puede recuperar durante 30 días.
 - La app solo ve los archivos que subiste desde la app, no el resto de tu Drive.
-- El buscador encuentra palabras dentro de los PDF y los Word.
+- Las fechas y notas están en el archivo `Mochi - fechas.json` de la carpeta Facultad. No lo borres.
+- Para probar la app sin cuenta: `npm run dev` y abrí <http://localhost:5173/?demo> (datos de prueba, solo en la compu).

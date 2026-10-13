@@ -50,3 +50,31 @@ export function demoList(q: string): DFile[] {
   const files = ids.length ? demoFiles.filter((f) => f.parents!.some((p) => ids.includes(p))) : demoFiles;
   return files;
 }
+
+// Un PDF chiquito de 3 páginas armado a mano, para probar el lector sin cuenta.
+export function demoBlob(id: string): Blob {
+  const f = demoFiles.find((x) => x.id === id);
+  const title = (f?.name ?? 'Demo').replace(/[()\\]/g, '').normalize('NFD').replace(/[^\x20-\x7e]/g, '');
+  const objs: string[] = ['<< /Type /Catalog /Pages 2 0 R >>', ''];
+  const kids: string[] = [];
+  for (let i = 0; i < 3; i++) {
+    const pageNum = 3 + i * 2;
+    kids.push(`${pageNum} 0 R`);
+    const text = `BT /F1 28 Tf 60 700 Td (${title}) Tj 0 -50 Td /F1 20 Tf (Pagina ${i + 1} de 3) Tj ET`;
+    objs.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents ${pageNum + 1} 0 R /Resources << /Font << /F1 9 0 R >> >> >>`);
+    objs.push(`<< /Length ${text.length} >>\nstream\n${text}\nendstream`);
+  }
+  objs[1] = `<< /Type /Pages /Kids [${kids.join(' ')}] /Count 3 >>`;
+  objs.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+  let out = '%PDF-1.4\n';
+  const offsets: number[] = [];
+  objs.forEach((o, i) => {
+    offsets.push(out.length);
+    out += `${i + 1} 0 obj\n${o}\nendobj\n`;
+  });
+  const xref = out.length;
+  out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n`;
+  for (const off of offsets) out += `${String(off).padStart(10, '0')} 00000 n \n`;
+  out += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  return new Blob([out], { type: 'application/pdf' });
+}

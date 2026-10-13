@@ -186,3 +186,10 @@ button {
 }
 .no-scrollbar { scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Aviso que se muestra unos segundos y se va solo */
+@keyframes hint-out {
+  0%, 75% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.hint-out { animation: hint-out 3.5s ease-in forwards; }
