@@ -1,7 +1,9 @@
-# Facu
+# Mochi
 
-App para tener los apuntes de la facultad ordenados por **año → materia → sección**
-(Teoría, Práctica, Parciales y finales, Resúmenes, Otros).
+App para tener los apuntes de la facultad ordenados por **año → materia → carpetas**.
+Publicada en <https://mochi-facu.vercel.app>.
+
+**Publicar cambios:** todo lo que se sube a la rama `main` de GitHub se publica solo en Vercel.
 
 Todo se guarda en tu Google Drive, en la carpeta **Facultad**. Si algún día la app deja de
 andar, tus archivos siguen ahí, en carpetas normales.
