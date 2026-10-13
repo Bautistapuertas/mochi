@@ -226,4 +226,3 @@ export async function searchFiles(tree: Tree, text: string) {
   return toItems(tree, await list(`fullText contains '${escapeQuery(text)}' and ${notFolder}`, { pageSize: 50, firstPageOnly: true }));
 }
 
-export const DRAWING_MIME = 'application/vnd.excalidraw+json';

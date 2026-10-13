@@ -3,10 +3,10 @@ import MoveModal from '../components/MoveModal';
 import { Back, ChevronLeft, ChevronRight, Download, External, Move, Offline, Pencil, Trash } from '../components/icons';
 import { Button, ConfirmModal, FileBadge, IconButton, Menu, PromptModal, Spinner, errorText, useToast } from '../components/ui';
 import { notifyChanged, useFacu } from '../lib/context';
-import { fileCache, getFile, rename, saveContent, trash, type DFile } from '../lib/drive';
+import { fileCache, getFile, rename, trash, type DFile } from '../lib/drive';
 import { dropOffline, fileBlob, keepOffline, offlineMeta } from '../lib/fileBlob';
 import { offlineIds } from '../lib/offline';
-import { DRAWING_MIME, itemOf, whereLabel } from '../lib/facu';
+import { itemOf, whereLabel } from '../lib/facu';
 import { baseName, canPreview, extOf, kindOf, saveBlob } from '../lib/files';
 import { closeFile, getViewerList, switchFile } from '../lib/router';
 
@@ -14,7 +14,6 @@ const PdfView = lazy(() => import('../viewers/PdfView'));
 const DocxView = lazy(() => import('../viewers/DocxView'));
 const SheetView = lazy(() => import('../viewers/SheetView'));
 const ImageView = lazy(() => import('../viewers/ImageView'));
-const DrawingView = lazy(() => import('../viewers/DrawingView'));
 
 export default function Viewer({ id }: { id: string }) {
   const { tree } = useFacu();
@@ -85,20 +84,18 @@ export default function Viewer({ id }: { id: string }) {
   const pos = siblings.indexOf(id);
   const prevId = pos > 0 ? siblings[pos - 1] : undefined;
   const nextId = pos >= 0 && pos < siblings.length - 1 ? siblings[pos + 1] : undefined;
-  const isDrawing = !!file && kindOf(file) === 'excalidraw';
 
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
       if (modal) return;
       if (e.key === 'Escape') return closeFile();
-      // En los dibujos las flechas mueven cosas del dibujo.
-      if (isDrawing || /INPUT|TEXTAREA/.test((e.target as HTMLElement).tagName)) return;
+      if (/INPUT|TEXTAREA/.test((e.target as HTMLElement).tagName)) return;
       if (e.key === 'ArrowLeft' && prevId) switchFile(prevId);
       if (e.key === 'ArrowRight' && nextId) switchFile(nextId);
     };
     addEventListener('keydown', k);
     return () => removeEventListener('keydown', k);
-  }, [modal, prevId, nextId, isDrawing]);
+  }, [modal, prevId, nextId]);
 
   // Deslizar el dedo de costado para pasar de archivo.
   const touch = useRef<{ x: number; y: number } | null>(null);
@@ -109,7 +106,7 @@ export default function Viewer({ id }: { id: string }) {
     onTouchEnd: (e: React.TouchEvent) => {
       const t = touch.current;
       touch.current = null;
-      if (!t || isDrawing) return;
+      if (!t) return;
       const dx = e.changedTouches[0].clientX - t.x;
       const dy = e.changedTouches[0].clientY - t.y;
       if (Math.abs(dx) < 80 || Math.abs(dy) > 50) return;
@@ -135,9 +132,43 @@ export default function Viewer({ id }: { id: string }) {
 
   const openInDrive = () => file?.webViewLink && open(file.webViewLink, '_blank');
 
+  // Los dibujos se abren en excalidraw.com: se descarga el archivo y se abre Excalidraw en otra pestaña.
+  // La pestaña se abre antes de descargar para que el navegador no la bloquee.
+  async function openInExcalidraw() {
+    if (!file) return;
+    open('https://excalidraw.com', '_blank');
+    try {
+      saveBlob(await fileBlob(file), file.name);
+      toast('Se descargó el dibujo. En Excalidraw tocá ☰ → Abrir y elegilo.');
+    } catch (e) {
+      toast(errorText(e));
+    }
+  }
+
   let body;
   if (error) body = <Center>{error}</Center>;
   else if (!file) body = <Center><Spinner /></Center>;
+  else if (kind === 'excalidraw')
+    body = (
+      <Center>
+        <FileBadge file={file} size="lg" />
+        <p className="font-bold text-lg mt-4">{baseName(file.name)}</p>
+        <p className="text-muted mt-1 max-w-sm">
+          Los dibujos se abren en Excalidraw. Se descarga el archivo y en Excalidraw lo abrís con <b>☰ → Abrir</b>.
+        </p>
+        <div className="flex flex-wrap justify-center gap-2 mt-5">
+          <Button variant="primary" onClick={openInExcalidraw}>
+            <External /> Abrir en Excalidraw
+          </Button>
+          <Button onClick={onDownload}>
+            <Download /> Solo descargar
+          </Button>
+        </div>
+        <p className="text-sm text-muted mt-6 max-w-sm">
+          Si lo cambiás en Excalidraw, guardalo y volvé a subirlo a esta carpeta para tener la versión nueva acá.
+        </p>
+      </Center>
+    );
   else if (!previewable)
     body = (
       <Center>
@@ -162,15 +193,6 @@ export default function Viewer({ id }: { id: string }) {
         {kind === 'word' && <DocxView blob={blob} />}
         {kind === 'excel' && <SheetView blob={blob} />}
         {kind === 'image' && <ImageView blob={blob} name={file.name} />}
-        {kind === 'excalidraw' && (
-          <DrawingView
-            blob={blob}
-            onSave={async (json) => {
-              setFile(await saveContent(file.id, new Blob([json], { type: DRAWING_MIME })));
-              notifyChanged();
-            }}
-          />
-        )}
       </Suspense>
     );
 
@@ -225,7 +247,7 @@ export default function Viewer({ id }: { id: string }) {
         {body}
       </div>
       {/* Celu: aviso de que se puede deslizar */}
-      {siblings.length > 1 && pos >= 0 && !isDrawing && (
+      {siblings.length > 1 && pos >= 0 && (
         <div className="sm:hidden absolute top-[calc(3.5rem+env(safe-area-inset-top)+8px)] inset-x-0 flex justify-center pointer-events-none">
           <span key={id} className="hint-out text-[11px] font-semibold text-muted bg-surface/90 border border-line rounded-full px-2.5 py-0.5">
             {pos + 1} de {siblings.length} · deslizá para cambiar

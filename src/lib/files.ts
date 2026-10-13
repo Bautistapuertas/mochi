@@ -37,7 +37,7 @@ export function canPreview(f: { name: string; mimeType: string }) {
   const e = extOf(f.name);
   if (k === 'word') return e === 'docx';
   if (k === 'image') return e !== 'heic';
-  return k === 'pdf' || k === 'excel' || k === 'excalidraw';
+  return k === 'pdf' || k === 'excel';
 }
 
 export function fmtSize(size?: string) {
