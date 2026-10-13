@@ -65,7 +65,7 @@ export default function Home() {
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 pb-16 safe-top">
       <header className="pt-6 pb-5">
-        <h1 className="text-[28px] font-extrabold tracking-tight leading-tight">Hola{firstName ? `, ${firstName}` : ''} 👋</h1>
+        <h1 className="text-[28px] font-extrabold tracking-tight leading-tight">Hola{firstName ? `, ${firstName}` : ''}</h1>
         <Stats />
       </header>
 

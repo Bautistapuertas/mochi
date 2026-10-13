@@ -141,7 +141,7 @@ export function ApproveModal({ materia, onClose }: { materia: Materia; onClose: 
     try {
       await setAprobada(materia, true, withNota ? n! : undefined);
       await reload();
-      if (!editing) toast(`¡Felicitaciones! ${materia.name} aprobada 🎉`);
+      if (!editing) toast(`¡Felicitaciones! Aprobaste ${materia.name}`);
       onClose();
     } catch (e) {
       setError(errorText(e));
@@ -150,7 +150,7 @@ export function ApproveModal({ materia, onClose }: { materia: Materia; onClose: 
   }
 
   return (
-    <Modal title={editing ? 'Nota final' : `¿Aprobaste ${materia.name}? 🎉`} onClose={onClose}>
+    <Modal title={editing ? 'Nota final' : `¿Aprobaste ${materia.name}?`} onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();

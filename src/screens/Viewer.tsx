@@ -139,7 +139,7 @@ export default function Viewer({ id }: { id: string }) {
     open('https://excalidraw.com', '_blank');
     try {
       saveBlob(await fileBlob(file), file.name);
-      toast('Se descargó el dibujo. En Excalidraw tocá ☰ → Abrir y elegilo.');
+      toast('Se descargó el dibujo. En Excalidraw abrí el menú, tocá Abrir y elegilo.');
     } catch (e) {
       toast(errorText(e));
     }
@@ -154,7 +154,7 @@ export default function Viewer({ id }: { id: string }) {
         <FileBadge file={file} size="lg" />
         <p className="font-bold text-lg mt-4">{baseName(file.name)}</p>
         <p className="text-muted mt-1 max-w-sm">
-          Los dibujos se abren en Excalidraw. Se descarga el archivo y en Excalidraw lo abrís con <b>☰ → Abrir</b>.
+          Los dibujos se abren en Excalidraw. Se descarga el archivo y en Excalidraw lo abrís desde el menú, con <b>Abrir</b>.
         </p>
         <div className="flex flex-wrap justify-center gap-2 mt-5">
           <Button variant="primary" onClick={openInExcalidraw}>
