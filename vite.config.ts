@@ -1,0 +1,72 @@
+import { defineConfig, loadEnv, type Plugin } from 'vite';
+import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
+import { VitePWA } from 'vite-plugin-pwa';
+
+// En desarrollo, sirve /api/* con el mismo archivo que usa Vercel en producción.
+function apiDev(): Plugin {
+  return {
+    name: 'api-dev',
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        if (!req.url?.startsWith('/api/')) return next();
+        try {
+          const mod = await server.ssrLoadModule('/api/[action].ts');
+          const headers = new Headers();
+          for (const [k, v] of Object.entries(req.headers)) if (typeof v === 'string') headers.set(k, v);
+          const r: Response = await mod.GET(new Request(`http://${req.headers.host}${req.url}`, { headers }));
+          res.statusCode = r.status;
+          r.headers.forEach((v, k) => {
+            if (k !== 'set-cookie') res.setHeader(k, v);
+          });
+          const cookies = r.headers.getSetCookie();
+          if (cookies.length) res.setHeader('set-cookie', cookies);
+          res.end(Buffer.from(await r.arrayBuffer()));
+        } catch (e) {
+          next(e);
+        }
+      });
+    },
+  };
+}
+
+export default defineConfig(({ mode }) => {
+  Object.assign(process.env, loadEnv(mode, process.cwd(), ''));
+  return {
+    plugins: [
+      react(),
+      tailwindcss(),
+      apiDev(),
+      VitePWA({
+        registerType: 'autoUpdate',
+        includeAssets: ['icon.svg', 'apple-touch-icon.png'],
+        manifest: {
+          name: 'Mochi',
+          short_name: 'Mochi',
+          description: 'Tus apuntes de la facultad, ordenados.',
+          lang: 'es',
+          theme_color: '#f6f5f2',
+          background_color: '#f6f5f2',
+          display: 'standalone',
+          start_url: '/',
+          icons: [
+            { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+            { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+            { src: 'maskable-icon-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          ],
+        },
+        workbox: {
+          globPatterns: ['index.html', 'assets/index-*.{js,css}', '*.{svg,png}'],
+          navigateFallbackDenylist: [/^\/api\//, /^\/privacidad/],
+          runtimeCaching: [
+            {
+              urlPattern: ({ url }) => url.origin === self.location.origin && url.pathname.startsWith('/assets/'),
+              handler: 'CacheFirst',
+              options: { cacheName: 'assets', expiration: { maxEntries: 200 } },
+            },
+          ],
+        },
+      }),
+    ],
+  };
+});

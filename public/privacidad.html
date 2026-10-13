@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Privacidad · Mochi</title>
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <style>
+      :root {
+        --bg: #f6f5f2;
+        --ink: #1d1d1f;
+        --muted: #6e6d68;
+        --accent: #e5383b;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #141414;
+          --ink: #f1f0ec;
+          --muted: #9d9c97;
+          --accent: #ff6b6b;
+        }
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font: 17px/1.65 ui-sans-serif, system-ui, sans-serif;
+      }
+      main {
+        max-width: 680px;
+        margin: 0 auto;
+        padding: 48px 20px 80px;
+      }
+      h1 {
+        font-size: 2rem;
+        line-height: 1.2;
+        margin: 0 0 8px;
+      }
+      h2 {
+        font-size: 1.15rem;
+        margin: 32px 0 6px;
+      }
+      p,
+      li {
+        color: var(--muted);
+      }
+      a {
+        color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Política de privacidad de Mochi</h1>
+      <p>Última actualización: 13 de octubre de 2026.</p>
+
+      <h2>Qué es Mochi</h2>
+      <p>
+        Mochi es una app personal para organizar apuntes de la facultad por año y materia. Los archivos se guardan en
+        el Google Drive de quien usa la app.
+      </p>
+
+      <h2>Qué datos usa</h2>
+      <ul>
+        <li>Tu nombre, correo y foto de perfil de Google, para mostrarte con qué cuenta entraste.</li>
+        <li>
+          Acceso a Google Drive con el permiso <code>drive.file</code>: la app solo puede ver y modificar los
+          archivos y carpetas que se crearon desde la app. No puede ver el resto de tu Drive.
+        </li>
+      </ul>
+
+      <h2>Dónde se guardan</h2>
+      <p>
+        Tus archivos quedan únicamente en tu Google Drive, dentro de la carpeta “Facultad”. Mochi no tiene una base de
+        datos propia ni guarda copias de tus archivos en otros servidores. Para mantener la sesión abierta se guarda
+        un código de acceso cifrado en una cookie de tu navegador.
+      </p>
+
+      <h2>Con quién se comparten</h2>
+      <p>Con nadie. Los datos no se venden, no se comparten con terceros y no se usan para publicidad.</p>
+
+      <h2>Cómo borrar tus datos</h2>
+      <p>
+        Podés cerrar sesión desde la app en cualquier momento. Para quitarle el acceso por completo, entrá a
+        <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a> y eliminá a Mochi.
+        Tus archivos siguen en tu Drive hasta que vos los borres.
+      </p>
+
+      <h2>Contacto</h2>
+      <p><a href="mailto:guille123giles@gmail.com">guille123giles@gmail.com</a></p>
+
+      <p><a href="/">← Volver a Mochi</a></p>
+    </main>
+  </body>
+</html>

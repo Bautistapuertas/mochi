@@ -1,0 +1,141 @@
+@import 'tailwindcss';
+
+@theme inline {
+  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-sunken: var(--sunken);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
+  --color-danger: var(--danger);
+}
+
+:root {
+  --bg: #f6f5f2;
+  --surface: #ffffff;
+  --sunken: #eeede8;
+  --ink: #1d1d1f;
+  --muted: #6e6d68;
+  --line: #e3e1db;
+  --accent: #e03538;
+  --accent-soft: #ffe8e6;
+  --on-accent: #ffffff;
+  --danger: #b02525;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141414;
+    --surface: #1d1d1e;
+    --sunken: #262627;
+    --ink: #f1f0ec;
+    --muted: #9d9c97;
+    --line: #313133;
+    --accent: #ff6b6b;
+    --accent-soft: #3a1f20;
+    --on-accent: #0c0d12;
+    --danger: #ff8787;
+    color-scheme: dark;
+  }
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  cursor: pointer;
+}
+
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+.safe-bottom {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+/* Documentos Word convertidos */
+.doc-body {
+  line-height: 1.65;
+}
+.doc-body h1 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin: 1.4em 0 0.5em;
+}
+.doc-body h2 {
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin: 1.3em 0 0.4em;
+}
+.doc-body h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 1.2em 0 0.4em;
+}
+.doc-body p {
+  margin: 0.6em 0;
+}
+.doc-body ul {
+  list-style: disc;
+  padding-left: 1.5em;
+}
+.doc-body ol {
+  list-style: decimal;
+  padding-left: 1.5em;
+}
+.doc-body img {
+  max-width: 100%;
+  height: auto;
+  margin: 1em auto;
+}
+.doc-body table {
+  border-collapse: collapse;
+  margin: 1em 0;
+}
+.doc-body td,
+.doc-body th {
+  border: 1px solid var(--line);
+  padding: 0.35em 0.6em;
+}
+
+/* Planillas de Excel */
+.sheet table {
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  background: var(--surface);
+}
+.sheet td,
+.sheet th {
+  border: 1px solid var(--line);
+  padding: 0.3em 0.6em;
+  white-space: nowrap;
+  min-width: 3rem;
+}
+.sheet tr:first-child td {
+  font-weight: 600;
+  background: var(--sunken);
+}
+
+.pdf-page {
+  background: #fff;
+  width: 100%;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.12);
+  border-radius: 4px;
+  overflow: hidden;
+}
