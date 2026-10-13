@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
-import FileTile from '../components/FileTile';
+import FileTile, { DRAG_TYPE } from '../components/FileTile';
 import { Back, Camera, Draw, External, Folder as FolderIcon, Move, Pencil, Plus, Trash, UploadIcon } from '../components/icons';
 import UploadSheet from '../components/UploadSheet';
 import { Button, ConfirmModal, IconButton, Menu, PromptModal, Spinner, errorText, useToast, type MenuItem } from '../components/ui';
@@ -115,8 +115,20 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
   const onDrop = async (e: DragEvent) => {
     e.preventDefault();
     setDragging(false);
+    if (!e.dataTransfer.types.includes('Files')) return;
     const items = mergeSameName(await itemsFromDrop(e.dataTransfer), destName);
     if (items.length) setPicked(items);
+  };
+
+  const moveTo = async (d: DragData, targetId: string, targetName: string) => {
+    if (d.parents.includes(targetId)) return;
+    try {
+      await move(d.id, d.parents, targetId);
+      toast(`Movido a ${targetName}`);
+      notifyChanged();
+    } catch (e) {
+      toast(errorText(e));
+    }
   };
 
   const changeSort = (s: Sort) => {
@@ -152,7 +164,8 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
       className="min-h-dvh"
       onDragOver={(e) => {
         e.preventDefault();
-        setDragging(true);
+        // Solo archivos que vienen de la compu; los cuadraditos de la app se mueven entre carpetas.
+        if (e.dataTransfer.types.includes('Files')) setDragging(true);
       }}
       onDragLeave={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false);
@@ -168,7 +181,12 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
           <Menu items={menu} />
         </header>
 
-        <button onClick={() => openFolder()} className="flex items-center gap-3 mb-5 text-left">
+        <DropTarget onFile={(d) => moveTo(d, m.id, m.name)}>
+          {(over) => (
+        <button
+          onClick={() => openFolder()}
+          className={`flex items-center gap-3 mb-5 text-left rounded-2xl -m-2 p-2 transition ${over ? 'bg-accent-soft ring-2 ring-accent' : ''}`}
+        >
           <span
             className="size-11 rounded-2xl grid place-items-center text-white text-lg font-extrabold shrink-0"
             style={{ background: m.color }}
@@ -176,7 +194,10 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
             {m.name.charAt(0).toUpperCase()}
           </span>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight leading-tight">{m.name}</h1>
+          {over && <span className="text-sm font-semibold text-accent">Soltá para dejarlo suelto acá</span>}
         </button>
+          )}
+        </DropTarget>
 
         <div className="flex gap-2 flex-wrap">
           <Button variant="primary" onClick={() => fileInput.current?.click()} className="flex-1 sm:flex-none">
@@ -217,6 +238,7 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
                   count={counts.get(f.id) ?? 0}
                   selected={selectedTop?.id === f.id}
                   onClick={() => openFolder(selectedTop?.id === f.id && !current?.parent ? undefined : f)}
+                  onFileDrop={(d) => moveTo(d, f.id, f.name)}
                 />
               ))}
               <NewFolderCard label="Nueva carpeta" onClick={() => (openFolder(), setModal('new-folder'))} />
@@ -243,7 +265,15 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
               {current && current.children.length > 0 && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-6">
                   {current.children.map((f) => (
-                    <FolderCard key={f.id} small name={f.name} color={m.color} count={counts.get(f.id) ?? 0} onClick={() => openFolder(f)} />
+                    <FolderCard
+                      key={f.id}
+                      small
+                      name={f.name}
+                      color={m.color}
+                      count={counts.get(f.id) ?? 0}
+                      onClick={() => openFolder(f)}
+                      onFileDrop={(d) => moveTo(d, f.id, f.name)}
+                    />
                   ))}
                 </div>
               )}
@@ -425,6 +455,7 @@ function FolderCard({
   selected = false,
   small = false,
   onClick,
+  onFileDrop,
 }: {
   name: string;
   color: string;
@@ -432,17 +463,22 @@ function FolderCard({
   selected?: boolean;
   small?: boolean;
   onClick: () => void;
+  onFileDrop: (d: DragData) => void;
 }) {
   return (
+    <DropTarget onFile={onFileDrop}>
+      {(over) => (
     <button
       onClick={onClick}
       aria-pressed={selected}
       className={`text-left border rounded-2xl flex items-center gap-3 transition active:scale-[.98] ${
         small ? 'p-3' : 'p-3.5'
       } ${
-        selected
-          ? 'bg-accent-soft border-accent ring-1 ring-accent'
-          : 'bg-surface border-line hover:-translate-y-0.5 hover:shadow-md'
+        over
+          ? 'bg-accent-soft border-accent ring-2 ring-accent scale-[1.03]'
+          : selected
+            ? 'bg-accent-soft border-accent ring-1 ring-accent'
+            : 'bg-surface border-line hover:-translate-y-0.5 hover:shadow-md'
       }`}
     >
       <svg viewBox="0 0 48 40" className={`${small ? 'w-8' : 'w-10'} h-auto shrink-0`} aria-hidden>
@@ -451,9 +487,45 @@ function FolderCard({
       </svg>
       <div className="min-w-0">
         <div className="font-semibold leading-snug line-clamp-2 text-[15px]">{name}</div>
-        <div className="text-xs text-muted mt-0.5">{count ? `${count} ${count === 1 ? 'archivo' : 'archivos'}` : 'Vacía'}</div>
+        <div className="text-xs text-muted mt-0.5">
+          {over ? 'Soltá para mover acá' : count ? `${count} ${count === 1 ? 'archivo' : 'archivos'}` : 'Vacía'}
+        </div>
       </div>
     </button>
+      )}
+    </DropTarget>
+  );
+}
+
+type DragData = { id: string; parents: string[] };
+
+// Recibe un cuadradito de archivo arrastrado. "contents" no altera la grilla.
+function DropTarget({ onFile, children }: { onFile: (d: DragData) => void; children: (over: boolean) => ReactNode }) {
+  const [over, setOver] = useState(false);
+  return (
+    <div
+      className="contents"
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'move';
+        setOver(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(false);
+      }}
+      onDrop={(e) => {
+        const raw = e.dataTransfer.getData(DRAG_TYPE);
+        if (!raw) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setOver(false);
+        onFile(JSON.parse(raw));
+      }}
+    >
+      {children(over)}
+    </div>
   );
 }
 

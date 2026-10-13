@@ -3,6 +3,9 @@ import type { FileItem } from '../lib/facu';
 import { KIND_STYLE, fmtDate, kindOf } from '../lib/files';
 import { openFile } from '../lib/router';
 
+// Para arrastrar un archivo a una carpeta dentro de la app.
+export const DRAG_TYPE = 'application/x-mochi-file';
+
 // Cuadradito de archivo: vista previa arriba (si Drive la tiene) y título abajo.
 export default function FileTile({ file, code, title }: { file: FileItem; code?: string; title: string }) {
   const s = KIND_STYLE[kindOf(file)];
@@ -11,6 +14,11 @@ export default function FileTile({ file, code, title }: { file: FileItem; code?:
   return (
     <button
       onClick={() => openFile(file.id)}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData(DRAG_TYPE, JSON.stringify({ id: file.id, parents: file.parents ?? [] }));
+        e.dataTransfer.effectAllowed = 'move';
+      }}
       className="group text-left bg-surface border border-line rounded-2xl overflow-hidden flex flex-col hover:-translate-y-0.5 hover:shadow-md active:scale-[.98] transition"
     >
       <div
