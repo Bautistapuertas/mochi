@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import FileTile from '../components/FileTile';
-import { Back, Camera, Draw, External, Folder as FolderIcon, Pencil, Plus, Trash, UploadIcon } from '../components/icons';
+import { Back, Camera, Draw, External, Folder as FolderIcon, Move, Pencil, Plus, Trash, UploadIcon } from '../components/icons';
 import UploadSheet from '../components/UploadSheet';
 import { Button, ConfirmModal, IconButton, Menu, PromptModal, Spinner, errorText, useToast, type MenuItem } from '../components/ui';
 import { CHANGED, notifyChanged, useFacu } from '../lib/context';
-import { createTextFile } from '../lib/drive';
+import { createTextFile, list, move } from '../lib/drive';
 import {
   DRAWING_MIME,
   EMPTY_DRAWING,
@@ -18,7 +18,7 @@ import {
 } from '../lib/facu';
 import { cleanNames, naturalCompare } from '../lib/files';
 import { go, openFile } from '../lib/router';
-import { itemsFromDrop, itemsFromInput, type UploadItem } from '../lib/upload';
+import { itemsFromDrop, itemsFromInput, mergeSameName, type UploadItem } from '../lib/upload';
 
 type Sort = 'nombre' | 'recientes';
 const SORT_KEY = 'facu:sort';
@@ -31,7 +31,14 @@ function readSort(): Sort {
   }
 }
 
-type ModalKind = 'rename-materia' | 'delete-materia' | 'rename-folder' | 'delete-folder' | 'new-folder' | 'draw';
+type ModalKind =
+  | 'rename-materia'
+  | 'delete-materia'
+  | 'rename-folder'
+  | 'unwrap-folder'
+  | 'delete-folder'
+  | 'new-folder'
+  | 'draw';
 
 export default function MateriaScreen({ id, folderId }: { id: string; folderId?: string }) {
   const { tree, reload } = useFacu();
@@ -108,7 +115,7 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
   const onDrop = async (e: DragEvent) => {
     e.preventDefault();
     setDragging(false);
-    const items = await itemsFromDrop(e.dataTransfer);
+    const items = mergeSameName(await itemsFromDrop(e.dataTransfer), destName);
     if (items.length) setPicked(items);
   };
 
@@ -123,6 +130,7 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
     ...(current
       ? [
           { label: 'Renombrar carpeta', icon: <Pencil />, onClick: () => setModal('rename-folder') },
+          { label: 'Sacar el contenido de esta carpeta', icon: <Move />, onClick: () => setModal('unwrap-folder') },
           { label: 'Eliminar carpeta', icon: <Trash />, danger: true, onClick: () => setModal('delete-folder') },
         ]
       : []),
@@ -133,7 +141,7 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
 
   const pickInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.length) {
-      const items = itemsFromInput(e.target.files);
+      const items = mergeSameName(itemsFromInput(e.target.files), destName);
       if (items.length) setPicked(items);
     }
     e.target.value = '';
@@ -325,6 +333,25 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
           onSubmit={async (name) => {
             await renameFolder(current.id, name);
             await reload();
+          }}
+        />
+      )}
+      {modal === 'unwrap-folder' && current && (
+        <ConfirmModal
+          title={`¿Sacar todo de ${current.name}?`}
+          text={`Las carpetas y archivos de adentro pasan a ${current.parent?.name ?? m.name}, y la carpeta “${current.name}” vacía se borra.`}
+          action="Sacar contenido"
+          danger={false}
+          onClose={() => setModal(null)}
+          onConfirm={async () => {
+            const target = current.parent?.id ?? m.id;
+            // Se pregunta a Drive lo que queda adentro, así reintentar después de un corte funciona.
+            const children = await list(`'${current.id}' in parents and trashed=false`);
+            for (const c of children) await move(c.id, [current.id], target);
+            await trashFolder(current.id);
+            openFolder(current.parent);
+            await reload();
+            toast(`Listo, ${children.length} elementos pasaron a ${current.parent?.name ?? m.name}`);
           }}
         />
       )}

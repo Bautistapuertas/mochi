@@ -48,6 +48,15 @@ export async function itemsFromDrop(dt: DataTransfer): Promise<UploadItem[]> {
   return out.filter(keep);
 }
 
+const norm = (s: string) => s.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+// Si subís la carpeta "Base de Datos" adentro de "Base de Datos", se guarda solo lo de adentro.
+export function mergeSameName(items: UploadItem[], destName: string): UploadItem[] {
+  const top = items[0]?.dirs[0];
+  if (!top || norm(top) !== norm(destName) || !items.every((i) => i.dirs[0] === top)) return items;
+  return items.map((i) => ({ ...i, dirs: i.dirs.slice(1) }));
+}
+
 export function summarize(items: UploadItem[]) {
   const folders = new Set(items.map((i) => i.dirs.join('/')).filter(Boolean));
   return { files: items.length, folders: folders.size, bytes: items.reduce((s, i) => s + i.file.size, 0) };

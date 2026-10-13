@@ -126,38 +126,45 @@ export function ConfirmModal({
   title,
   text,
   action,
+  danger = true,
   onConfirm,
   onClose,
 }: {
   title: string;
   text: string;
   action: string;
+  danger?: boolean;
   onConfirm: () => Promise<void>;
   onClose: () => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
   return (
     <Modal title={title} onClose={onClose}>
       <p className="text-muted">{text}</p>
+      {error && <p className="text-danger mt-3 text-[15px]">{error}</p>}
       <div className="flex gap-3 mt-5">
         <Button className="flex-1" onClick={onClose}>
           Cancelar
         </Button>
         <Button
-          variant="danger"
+          variant={danger ? 'danger' : 'primary'}
           className="flex-1"
           disabled={busy}
           onClick={async () => {
             setBusy(true);
+            setError('');
             try {
               await onConfirm();
               onClose();
+            } catch (e) {
+              setError(errorText(e));
             } finally {
               setBusy(false);
             }
           }}
         >
-          {busy ? '…' : action}
+          {busy ? '…' : error ? 'Reintentar' : action}
         </Button>
       </div>
     </Modal>
