@@ -30,14 +30,8 @@ export default function Home() {
   const [deleting, setDeleting] = useState<Year | null>(null);
   const [busy, setBusy] = useState(false);
   const [dropYear, setDropYear] = useState<string | null>(null);
-  const folderInput = useRef<HTMLInputElement>(null);
-  const pickYear = useRef<Year | null>(null);
 
-  useEffect(() => {
-    folderInput.current?.setAttribute('webkitdirectory', '');
-  }, [tree.years.length]);
-
-  // Cada carpeta de primer nivel se convierte en una materia.
+  // Al soltar carpetas sobre un año, cada carpeta de primer nivel se convierte en una materia.
   function importGroups(year: Year, items: UploadItem[]) {
     const groups = groupByFolder(items);
     if (!groups.length) return toast('Soltá carpetas (no archivos sueltos) para crear materias.');
@@ -73,18 +67,6 @@ export default function Home() {
         <SearchIcon />
         Buscar en todos tus apuntes…
       </button>
-
-      <input
-        ref={folderInput}
-        type="file"
-        multiple
-        hidden
-        onChange={(e) => {
-          const items = e.target.files ? itemsFromInput(e.target.files) : [];
-          e.target.value = '';
-          if (items.length && pickYear.current) importGroups(pickYear.current, items);
-        }}
-      />
 
       {tree.years.map((y) => (
         <section
@@ -139,17 +121,6 @@ export default function Home() {
             >
               <Plus />
               Agregar materia
-            </button>
-            <button
-              onClick={() => {
-                pickYear.current = y;
-                folderInput.current?.click();
-              }}
-              className="hidden md:flex rounded-2xl border-2 border-dashed border-line min-h-28 flex-col items-center justify-center gap-1 text-muted font-semibold hover:border-accent hover:text-accent transition px-3 text-center"
-            >
-              <FolderIcon />
-              Importar carpeta
-              <span className="text-xs font-medium">o arrastrá varias acá</span>
             </button>
           </div>
         </section>
