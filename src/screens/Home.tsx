@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import FileRow from '../components/FileRow';
 import { Folder as FolderIcon, Plus, SearchIcon, Pencil, Trash } from '../components/icons';
 import UploadSheet from '../components/UploadSheet';
-import { itemsFromInput, summarize, type UploadItem } from '../lib/upload';
+import { itemsFromDrop, itemsFromInput, summarize, type UploadItem } from '../lib/upload';
 import UserMenu from '../components/UserMenu';
 import { Button, ConfirmModal, Menu, Modal, PromptModal, Spinner, errorText, useToast } from '../components/ui';
 import { CHANGED, useFacu } from '../lib/context';
@@ -24,10 +24,26 @@ export default function Home() {
   const { tree, reload, user } = useFacu();
   const toast = useToast();
   const [recent, setRecent] = useState<FileItem[]>([]);
-  const [addingTo, setAddingTo] = useState<Year | null>(null);
+  const [adding, setAdding] = useState<{ year: Year; prefill?: Group } | null>(null);
+  const [bulk, setBulk] = useState<{ year: Year; groups: Group[] } | null>(null);
   const [renaming, setRenaming] = useState<Year | null>(null);
   const [deleting, setDeleting] = useState<Year | null>(null);
   const [busy, setBusy] = useState(false);
+  const [dropYear, setDropYear] = useState<string | null>(null);
+  const folderInput = useRef<HTMLInputElement>(null);
+  const pickYear = useRef<Year | null>(null);
+
+  useEffect(() => {
+    folderInput.current?.setAttribute('webkitdirectory', '');
+  }, [tree.years.length]);
+
+  // Cada carpeta de primer nivel se convierte en una materia.
+  function importGroups(year: Year, items: UploadItem[]) {
+    const groups = groupByFolder(items);
+    if (!groups.length) return toast('Soltá carpetas (no archivos sueltos) para crear materias.');
+    if (groups.length === 1) setAdding({ year, prefill: groups[0] });
+    else setBulk({ year, groups });
+  }
 
   useEffect(() => {
     const load = () => recentFiles(tree).then(setRecent).catch(() => {});
@@ -58,10 +74,40 @@ export default function Home() {
         Buscar en todos tus apuntes…
       </button>
 
+      <input
+        ref={folderInput}
+        type="file"
+        multiple
+        hidden
+        onChange={(e) => {
+          const items = e.target.files ? itemsFromInput(e.target.files) : [];
+          e.target.value = '';
+          if (items.length && pickYear.current) importGroups(pickYear.current, items);
+        }}
+      />
+
       {tree.years.map((y) => (
-        <section key={y.id} className="mt-8">
+        <section
+          key={y.id}
+          className={`mt-8 rounded-3xl transition ${dropYear === y.id ? 'outline-4 outline-dashed outline-accent outline-offset-8 bg-accent-soft/40' : ''}`}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDropYear(y.id);
+          }}
+          onDragLeave={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropYear(null);
+          }}
+          onDrop={async (e) => {
+            e.preventDefault();
+            setDropYear(null);
+            importGroups(y, await itemsFromDrop(e.dataTransfer));
+          }}
+        >
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-bold">{y.name}</h2>
+            <h2 className="text-lg font-bold">
+              {y.name}
+              {dropYear === y.id && <span className="text-accent font-semibold text-base"> · Soltá para crear las materias acá</span>}
+            </h2>
             <Menu
               label={`Opciones de ${y.name}`}
               items={[
@@ -88,11 +134,22 @@ export default function Home() {
               </button>
             ))}
             <button
-              onClick={() => setAddingTo(y)}
+              onClick={() => setAdding({ year: y })}
               className="rounded-2xl border-2 border-dashed border-line min-h-28 flex flex-col items-center justify-center gap-1 text-muted font-semibold hover:border-accent hover:text-accent transition"
             >
               <Plus />
               Agregar materia
+            </button>
+            <button
+              onClick={() => {
+                pickYear.current = y;
+                folderInput.current?.click();
+              }}
+              className="hidden md:flex rounded-2xl border-2 border-dashed border-line min-h-28 flex-col items-center justify-center gap-1 text-muted font-semibold hover:border-accent hover:text-accent transition px-3 text-center"
+            >
+              <FolderIcon />
+              Importar carpeta
+              <span className="text-xs font-medium">o arrastrá varias acá</span>
             </button>
           </div>
         </section>
@@ -127,7 +184,15 @@ export default function Home() {
         </section>
       )}
 
-      {addingTo && <NewMateria year={addingTo} onClose={() => setAddingTo(null)} />}
+      {adding && (
+        <NewMateria
+          key={adding.prefill?.name ?? 'nueva'}
+          year={adding.year}
+          prefill={adding.prefill}
+          onClose={() => setAdding(null)}
+        />
+      )}
+      {bulk && <BulkImport year={bulk.year} groups={bulk.groups} onClose={() => setBulk(null)} />}
       {renaming && (
         <PromptModal
           title="Nombre del año"
@@ -160,15 +225,28 @@ export default function Home() {
   );
 }
 
-function NewMateria({ year, onClose }: { year: Year; onClose: () => void }) {
+type Group = { name: string; items: UploadItem[] };
+
+// Agrupa lo elegido por carpeta de primer nivel; lo de adentro queda relativo a esa carpeta.
+function groupByFolder(items: UploadItem[]): Group[] {
+  const groups = new Map<string, UploadItem[]>();
+  for (const it of items) {
+    const top = it.dirs[0];
+    if (!top) continue;
+    groups.set(top, [...(groups.get(top) ?? []), { ...it, dirs: it.dirs.slice(1) }]);
+  }
+  return [...groups].map(([name, items]) => ({ name, items }));
+}
+
+function NewMateria({ year, prefill, onClose }: { year: Year; prefill?: Group; onClose: () => void }) {
   const { tree, reload } = useFacu();
   const toast = useToast();
   const used = tree.materias.size;
-  const [name, setName] = useState('');
+  const [name, setName] = useState(prefill?.name ?? '');
   const [color, setColor] = useState(COLORS[used % COLORS.length]);
   const [busy, setBusy] = useState(false);
   // Contenido de una carpeta de la compu para importar como materia.
-  const [items, setItems] = useState<UploadItem[] | null>(null);
+  const [items, setItems] = useState<UploadItem[] | null>(prefill?.items ?? null);
   const [uploading, setUploading] = useState<{ id: string; name: string } | null>(null);
   const folderInput = useRef<HTMLInputElement>(null);
 
@@ -223,10 +301,11 @@ function NewMateria({ year, onClose }: { year: Year; onClose: () => void }) {
           onChange={(e) => {
             const all = e.target.files ? itemsFromInput(e.target.files) : [];
             e.target.value = '';
-            if (!all.length) return;
             // La carpeta elegida pasa a ser la materia; lo de adentro, sus carpetas.
-            setName(all[0].dirs[0] ?? name);
-            setItems(all.map((it) => ({ ...it, dirs: it.dirs.slice(1) })));
+            const g = groupByFolder(all)[0];
+            if (!g) return;
+            setName(g.name);
+            setItems(g.items);
           }}
         />
         {info ? (
@@ -279,6 +358,81 @@ function NewMateria({ year, onClose }: { year: Year; onClose: () => void }) {
         </Button>
       </form>
     </Modal>
+  );
+}
+
+// Varias carpetas soltadas a la vez: crea una materia por carpeta y las sube una atrás de otra.
+function BulkImport({ year, groups, onClose }: { year: Year; groups: Group[]; onClose: () => void }) {
+  const { tree, reload } = useFacu();
+  const toast = useToast();
+  const [step, setStep] = useState(0);
+  const [target, setTarget] = useState<{ id: string; name: string } | null>(null);
+  const [error, setError] = useState('');
+  // Guarda la promesa (no el resultado) para no crear la misma materia dos veces.
+  const created = useRef(new Map<number, Promise<{ id: string; name: string }>>());
+  const baseColor = useRef(tree.materias.size).current;
+
+  useEffect(() => {
+    let alive = true;
+    setTarget(null);
+    (async () => {
+      try {
+        if (!created.current.has(step)) {
+          const g = groups[step];
+          const existing = year.materias.find((x) => x.name.trim().toLowerCase() === g.name.trim().toLowerCase());
+          created.current.set(
+            step,
+            existing ? Promise.resolve(existing) : addMateria(year, g.name, COLORS[(baseColor + step) % COLORS.length]),
+          );
+        }
+        const m = await created.current.get(step)!;
+        if (alive) setTarget({ id: m.id, name: m.name });
+      } catch (e) {
+        if (alive) setError(errorText(e));
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [step, groups, year, baseColor]);
+
+  const finish = async () => {
+    await reload();
+    onClose();
+  };
+
+  if (error)
+    return (
+      <Modal title="No se pudo crear la materia" onClose={finish}>
+        <p className="text-danger">{error}</p>
+        <Button className="w-full mt-5" onClick={finish}>
+          Cerrar
+        </Button>
+      </Modal>
+    );
+
+  if (!target)
+    return (
+      <Modal title={`Importando ${step + 1} de ${groups.length}`} onClose={() => {}}>
+        <div className="flex items-center gap-3 text-muted">
+          <Spinner /> Creando {groups[step].name}…
+        </div>
+      </Modal>
+    );
+
+  return (
+    <UploadSheet
+      key={step}
+      items={groups[step].items}
+      parentId={target.id}
+      destName={`${target.name} (${step + 1} de ${groups.length})`}
+      onClose={finish}
+      onDone={async () => {
+        if (step + 1 < groups.length) return setStep(step + 1);
+        toast(`Listo: ${groups.length} materias importadas en ${year.name}`);
+        await finish();
+      }}
+    />
   );
 }
 

@@ -193,6 +193,10 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
             <Draw /> Dibujo
           </Button>
         </div>
+        <p className="text-sm text-muted mt-2.5">
+          Se guarda en <span className="font-semibold text-ink">{[m.name, ...path.map((f) => f.name)].join(' › ')}</span>
+          <span className="hidden md:inline"> · También podés arrastrar archivos y varias carpetas a la ventana</span>
+        </p>
         <input ref={fileInput} type="file" multiple hidden onChange={pickInput} />
         <input ref={folderInput} type="file" multiple hidden onChange={pickInput} />
         <input ref={cameraInput} type="file" accept="image/*" capture="environment" hidden onChange={pickInput} />
@@ -348,6 +352,9 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
             // Se pregunta a Drive lo que queda adentro, así reintentar después de un corte funciona.
             const children = await list(`'${current.id}' in parents and trashed=false`);
             for (const c of children) await move(c.id, [current.id], target);
+            // Solo se borra si de verdad quedó vacía.
+            const left = await list(`'${current.id}' in parents and trashed=false`);
+            if (left.length) throw new Error(`Quedaron ${left.length} elementos sin mover. Reintentá.`);
             await trashFolder(current.id);
             openFolder(current.parent);
             await reload();
