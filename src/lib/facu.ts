@@ -201,12 +201,4 @@ export async function searchFiles(tree: Tree, text: string) {
   return toItems(tree, await list(`fullText contains '${escapeQuery(text)}' and ${notFolder}`, { pageSize: 50, firstPageOnly: true }));
 }
 
-export const EMPTY_DRAWING = JSON.stringify({
-  type: 'excalidraw',
-  version: 2,
-  source: 'mochi',
-  elements: [],
-  appState: { viewBackgroundColor: '#ffffff' },
-  files: {},
-});
 export const DRAWING_MIME = 'application/vnd.excalidraw+json';

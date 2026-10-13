@@ -7,7 +7,6 @@ import {
   Camera,
   Check,
   Close,
-  Draw,
   External,
   Folder as FolderIcon,
   Move,
@@ -20,10 +19,8 @@ import {
 import UploadSheet from '../components/UploadSheet';
 import { Button, ConfirmModal, IconButton, Menu, PromptModal, Spinner, errorText, useToast, type MenuItem } from '../components/ui';
 import { CHANGED, notifyChanged, useFacu } from '../lib/context';
-import { createTextFile, list, move, trash } from '../lib/drive';
+import { list, move, trash } from '../lib/drive';
 import {
-  DRAWING_MIME,
-  EMPTY_DRAWING,
   addFolder,
   folderPath,
   materiaFiles,
@@ -35,7 +32,7 @@ import {
   type Folder,
 } from '../lib/facu';
 import { baseName, cleanNames, naturalCompare } from '../lib/files';
-import { go, openFile } from '../lib/router';
+import { go } from '../lib/router';
 import { itemsFromDrop, itemsFromInput, mergeSameName, type UploadItem } from '../lib/upload';
 
 type Sort = 'nombre' | 'recientes';
@@ -55,8 +52,7 @@ type ModalKind =
   | 'rename-folder'
   | 'unwrap-folder'
   | 'delete-folder'
-  | 'new-folder'
-  | 'draw';
+  | 'new-folder';
 
 export default function MateriaScreen({ id, folderId }: { id: string; folderId?: string }) {
   const { tree, reload } = useFacu();
@@ -320,9 +316,6 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
           </Button>
           <Button onClick={() => cameraInput.current?.click()} className="md:hidden">
             <Camera /> Foto
-          </Button>
-          <Button onClick={() => setModal('draw')}>
-            <Draw /> Dibujo
           </Button>
         </div>
         <p className="text-sm text-muted mt-2.5">
@@ -644,19 +637,6 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
             go('/');
             await reload();
             toast('Listo. Está en la papelera de Drive por 30 días.');
-          }}
-        />
-      )}
-      {modal === 'draw' && (
-        <PromptModal
-          title={`Nuevo dibujo en ${destName}`}
-          placeholder="Ej: Diagrama unidad 2"
-          action="Crear y abrir"
-          onClose={() => setModal(null)}
-          onSubmit={async (name) => {
-            const f = await createTextFile(`${name}.excalidraw`, destId, EMPTY_DRAWING, DRAWING_MIME);
-            notifyChanged();
-            openFile(f.id);
           }}
         />
       )}
