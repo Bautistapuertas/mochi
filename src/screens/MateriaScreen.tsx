@@ -166,12 +166,6 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
     return { list, names };
   }, [files, current, sort]);
 
-  // Lo último que se agregó a la materia, para la vista general.
-  const recent = useMemo(
-    () => [...(files ?? [])].sort((a, b) => b.modifiedTime.localeCompare(a.modifiedTime)).slice(0, 4),
-    [files],
-  );
-
   // El lector usa esta lista para pasar al anterior o siguiente.
   useEffect(() => {
     const shown = results ? [...results.byName, ...results.byContent] : here.list;
@@ -346,15 +340,6 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
           </div>
         )}
 
-        {!current && recent.length > 0 && here.list.length !== recent.length && (
-          <section className="mb-8">
-            <h2 className="text-sm font-bold text-muted mb-3">Lo último que agregaste</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
-              {recent.map((f) => tile(f, undefined, baseName(f.name), placeLabel(f)))}
-            </div>
-          </section>
-        )}
-
         {here.list.length > 0 ? (
           <section>
             <div className="flex items-center justify-between gap-2 mb-3">
@@ -392,7 +377,7 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
         ) : m.folders.length === 0 ? (
           <EmptyDrop onClick={() => fileInput.current?.click()} title="Todavía no hay nada acá" />
         ) : (
-          recent.length === 0 && <p className="text-muted text-center py-10">Elegí una carpeta para ver sus archivos.</p>
+          <p className="text-muted text-center py-10">Elegí una carpeta para ver sus archivos.</p>
         )}
       </>
     );
