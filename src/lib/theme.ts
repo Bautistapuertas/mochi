@@ -17,7 +17,7 @@ export function applyTheme(t: Theme = getTheme()) {
   if (t === 'auto') root.removeAttribute('data-theme');
   else root.setAttribute('data-theme', t);
   const meta = document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]');
-  meta.forEach((m) => (m.content = isDark() ? '#141414' : '#f6f5f2'));
+  meta.forEach((m) => (m.content = isDark() ? '#0f0f11' : '#fafafa'));
 }
 
 export function setTheme(t: Theme) {

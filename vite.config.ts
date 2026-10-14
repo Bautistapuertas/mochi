@@ -51,8 +51,8 @@ export default defineConfig(({ mode }) => {
           short_name: 'Mochi',
           description: 'Tus apuntes de la facultad, ordenados.',
           lang: 'es',
-          theme_color: '#f6f5f2',
-          background_color: '#f6f5f2',
+          theme_color: '#fafafa',
+          background_color: '#fafafa',
           display: 'standalone',
           start_url: '/',
           icons: [

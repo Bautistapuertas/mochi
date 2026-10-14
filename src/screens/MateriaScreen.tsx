@@ -933,7 +933,7 @@ function FolderCard({
         <button
           onClick={onClick}
           className={`text-left border rounded-2xl flex items-center gap-3 p-3 transition active:scale-[.98] ${
-            over ? 'bg-accent-soft border-accent ring-2 ring-accent scale-[1.03]' : 'bg-surface border-line hover:-translate-y-0.5 hover:shadow-md'
+            over ? 'bg-accent-soft border-accent ring-2 ring-accent scale-[1.03]' : 'bg-surface border-line hover:border-muted/40 hover:shadow-sm'
           }`}
         >
           <svg viewBox="0 0 48 40" className="w-9 h-auto shrink-0" aria-hidden>
@@ -1002,7 +1002,7 @@ function EmptyDrop({ title, onClick }: { title: string; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="w-full rounded-3xl border-2 border-dashed border-line py-14 px-6 text-center hover:border-accent transition"
+      className="w-full rounded-3xl border border-dashed border-line py-14 px-6 text-center hover:border-accent transition"
     >
       <p className="font-bold text-lg">{title}</p>
       <p className="text-muted mt-1">

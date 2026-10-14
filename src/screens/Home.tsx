@@ -101,7 +101,7 @@ export default function Home() {
         ) : (
           <button
             onClick={() => setPicking(true)}
-            className="w-full text-left rounded-3xl border-2 border-dashed border-line p-5 hover:border-accent transition"
+            className="w-full text-left rounded-3xl border border-dashed border-line p-5 hover:border-accent transition"
           >
             <p className="font-bold">¿Qué materias estás cursando?</p>
             <p className="text-muted text-[15px] mt-1">Elegilas y te aparecen acá arriba, aunque sean de años distintos.</p>
@@ -172,7 +172,7 @@ export default function Home() {
                     ))}
                   <button
                     onClick={() => setAdding({ year: y })}
-                    className="rounded-2xl border-2 border-dashed border-line min-h-24 flex items-center justify-center gap-2 text-muted font-semibold text-[15px] hover:border-accent hover:text-accent transition"
+                    className="rounded-2xl border border-dashed border-line min-h-24 flex items-center justify-center gap-2 text-muted font-semibold text-[15px] hover:border-accent hover:text-accent transition"
                   >
                     <Plus /> Materia
                   </button>
@@ -281,7 +281,7 @@ function MateriaCard({ m, year }: { m: Materia; year?: Year }) {
   return (
     <button
       onClick={() => go(`/m/${m.id}`)}
-      className="group text-left bg-surface border border-line rounded-2xl flex flex-col overflow-hidden hover:-translate-y-0.5 hover:shadow-md active:scale-[.98] transition"
+      className="group text-left bg-surface border border-line rounded-2xl flex flex-col overflow-hidden hover:border-muted/40 hover:shadow-sm active:scale-[.98] transition"
     >
       <MateriaCover m={m} className="h-20 shrink-0" />
       <span className="flex flex-col flex-1 p-3.5 pt-3">
@@ -534,7 +534,7 @@ function NewMateria({ year, prefill, onClose }: { year: Year; prefill?: Group; o
           <button
             type="button"
             onClick={() => folderInput.current?.click()}
-            className="w-full flex items-center gap-3 rounded-2xl border-2 border-dashed border-line px-4 py-3 mb-4 text-left hover:border-accent transition"
+            className="w-full flex items-center gap-3 rounded-2xl border border-dashed border-line px-4 py-3 mb-4 text-left hover:border-accent transition"
           >
             <FolderIcon className="text-accent shrink-0" />
             <span>

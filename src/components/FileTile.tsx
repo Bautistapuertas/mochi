@@ -66,7 +66,7 @@ export default function FileTile({
         className={`w-full h-full text-left bg-surface border rounded-2xl overflow-hidden flex flex-col transition select-none [-webkit-touch-callout:none] ${
           selected
             ? 'border-accent ring-2 ring-accent'
-            : 'border-line hover:-translate-y-0.5 hover:shadow-md active:scale-[.98]'
+            : 'border-line hover:border-muted/40 hover:shadow-sm active:scale-[.98]'
         }`}
       >
         <div

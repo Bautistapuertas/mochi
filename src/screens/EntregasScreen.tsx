@@ -60,7 +60,7 @@ export default function EntregasScreen() {
       )}
 
       {all.length === 0 ? (
-        <div className="text-center py-16 px-6 rounded-3xl border-2 border-dashed border-line">
+        <div className="text-center py-16 px-6 rounded-3xl border border-dashed border-line">
           <p className="font-bold text-lg">No tenés entregas anotadas</p>
           <p className="text-muted mt-1">Anotá cada TP o actividad y tildala cuando la entregues. Así no se te pasa ninguna.</p>
           <Button variant="primary" className="mt-5" onClick={() => setEditing('new')}>
@@ -80,7 +80,7 @@ export default function EntregasScreen() {
             {next.length ? (
               list(next)
             ) : (
-              <p className="rounded-3xl border-2 border-dashed border-line px-4 py-5 text-muted text-center">
+              <p className="rounded-3xl border border-dashed border-line px-4 py-5 text-muted text-center">
                 {late.length ? 'Nada más por ahora.' : 'Estás al día. Nada para entregar.'}
               </p>
             )}

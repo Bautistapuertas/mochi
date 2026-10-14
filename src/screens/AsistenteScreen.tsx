@@ -212,7 +212,7 @@ export function Chat({ variant, onClose }: { variant: 'page' | 'panel'; onClose?
               {!it.done && '…'}
             </div>
           ) : it.kind === 'confirm' ? (
-            <div key={i} className="rounded-3xl border-2 border-accent/40 bg-accent-soft/50 p-4 max-w-[92%]">
+            <div key={i} className="rounded-3xl border border-accent/40 bg-accent-soft/50 p-4 max-w-[92%]">
               <p className="text-sm font-semibold text-accent mb-1">
                 {it.status === 'pending' ? '¿Lo hago?' : it.status === 'ok' ? 'Hecho' : it.status === 'cancel' ? 'Cancelado' : 'No se pudo'}
               </p>

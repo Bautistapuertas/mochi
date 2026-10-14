@@ -30,7 +30,7 @@ export default function FechasScreen() {
       </header>
 
       {groups.length === 0 ? (
-        <div className="text-center py-16 px-6 rounded-3xl border-2 border-dashed border-line">
+        <div className="text-center py-16 px-6 rounded-3xl border border-dashed border-line">
           <Calendar width={36} height={36} className="mx-auto text-muted" />
           <p className="font-bold text-lg mt-3">No tenés fechas cargadas</p>
           <p className="text-muted mt-1">Anotá tu próximo parcial y te mostramos cuántos días faltan.</p>

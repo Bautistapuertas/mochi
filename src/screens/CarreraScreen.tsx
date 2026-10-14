@@ -208,7 +208,7 @@ export default function CarreraScreen() {
             ) : (
               <button
                 onClick={() => setOpenLevels({ ...openLevels, [key]: true })}
-                className="w-full rounded-3xl border-2 border-dashed border-line px-4 py-3 text-muted text-left hover:border-accent transition"
+                className="w-full rounded-3xl border border-dashed border-line px-4 py-3 text-muted text-left hover:border-accent transition"
               >
                 Ver las {all.length} opciones y marcar las que hiciste
               </button>

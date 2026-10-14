@@ -176,7 +176,7 @@ export function UpcomingExams() {
       {exams.length === 0 ? (
         <button
           onClick={() => setEditing('new')}
-          className="w-full rounded-2xl border-2 border-dashed border-line px-4 py-4 text-left text-muted hover:border-accent transition"
+          className="w-full rounded-2xl border border-dashed border-line px-4 py-4 text-left text-muted hover:border-accent transition"
         >
           Anotá tu próximo parcial y te vamos avisando cuántos días faltan.
         </button>
@@ -188,7 +188,7 @@ export function UpcomingExams() {
               <button
                 key={e.id}
                 onClick={() => setEditing(e)}
-                className="shrink-0 w-48 text-left bg-surface border border-line rounded-2xl p-4 hover:-translate-y-0.5 hover:shadow-md transition"
+                className="shrink-0 w-48 text-left bg-surface border border-line rounded-2xl p-4 hover:border-muted/40 hover:shadow-sm transition"
               >
                 <div className={`text-xl font-extrabold ${urgency(e.date)}`}>{whenLabel(e.date)}</div>
                 <div className="font-semibold mt-1 truncate">{e.title}</div>
