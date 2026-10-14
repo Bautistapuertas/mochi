@@ -11,6 +11,7 @@ import {
   Offline,
   Pencil,
   Plus,
+  Share,
   SearchIcon,
   Trash,
   UploadIcon,
@@ -18,6 +19,7 @@ import {
 import { MateriaBadge, MateriaCover } from '../components/MateriaCover';
 import { MateriaInfoModal, MateriaSummary } from '../components/MateriaInfo';
 import MoveModal from '../components/MoveModal';
+import ShareModal from '../components/ShareModal';
 import UploadSheet from '../components/UploadSheet';
 import { Button, ConfirmModal, IconButton, Menu, Modal, PromptModal, errorText, useToast, type MenuItem } from '../components/ui';
 import { CHANGED, notifyChanged, useFacu } from '../lib/context';
@@ -58,7 +60,8 @@ type ModalKind =
   | 'delete-folder'
   | 'new-folder'
   | 'info'
-  | 'add';
+  | 'add'
+  | 'share';
 
 export default function MateriaScreen({ id, folderId }: { id: string; folderId?: string }) {
   const { tree, reload } = useFacu();
@@ -263,6 +266,11 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
   };
 
   const menu: MenuItem[] = [
+    {
+      label: current ? `Compartir ${current.name}` : 'Compartir la materia',
+      icon: <Share />,
+      onClick: () => setModal('share'),
+    },
     ...(current
       ? [
           { label: 'Renombrar carpeta', icon: <Pencil />, onClick: () => setModal('rename-folder') },
@@ -566,6 +574,7 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
         </Modal>
       )}
       {modal === 'info' && <MateriaInfoModal m={m} onClose={() => setModal(null)} />}
+      {modal === 'share' && <ShareModal target={current ?? m} onClose={() => setModal(null)} />}
 
       {selecting && (
         <div className="fixed inset-x-0 bottom-20 lg:bottom-0 z-40 flex justify-center px-3 pb-4 lg:pl-20 safe-bottom pointer-events-none">

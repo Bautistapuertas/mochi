@@ -9,6 +9,7 @@ import Shell from './components/Shell';
 import FechasScreen from './screens/FechasScreen';
 import Home from './screens/Home';
 import YoScreen from './screens/YoScreen';
+import ImportScreen from './screens/ImportScreen';
 import Login from './screens/Login';
 import MateriaScreen from './screens/MateriaScreen';
 import SearchScreen from './screens/SearchScreen';
@@ -37,6 +38,8 @@ function OfflineBanner({ onBack }: { onBack: () => void }) {
   );
 }
 
+const PENDING = 'mochi:importar';
+
 export default function App() {
   const [tree, setTree] = useState<Tree | null>(null);
   const [status, setStatus] = useState<'loading' | 'login' | 'ready' | 'error'>('loading');
@@ -58,6 +61,18 @@ export default function App() {
     reload();
   }, [reload]);
 
+  // Después de entrar, se abre el link compartido que se estaba por recibir.
+  useEffect(() => {
+    if (status !== 'ready') return;
+    try {
+      const pending = localStorage.getItem(PENDING);
+      if (pending) {
+        localStorage.removeItem(PENDING);
+        if (location.hash !== pending) location.hash = pending;
+      }
+    } catch {}
+  }, [status, tree]);
+
   if (status === 'loading')
     return (
       <div className="min-h-dvh grid place-items-center">
@@ -65,7 +80,14 @@ export default function App() {
       </div>
     );
 
-  if (status === 'login') return <Login />;
+  if (status === 'login') {
+    if (route.name === 'importar') {
+      try {
+        localStorage.setItem(PENDING, location.hash);
+      } catch {}
+    }
+    return <Login sharing={route.name === 'importar'} />;
+  }
 
   if (status === 'error' || !tree)
     return (
@@ -92,6 +114,8 @@ export default function App() {
             <FechasScreen />
           ) : route.name === 'yo' ? (
             <YoScreen />
+          ) : route.name === 'importar' && route.id ? (
+            <ImportScreen id={route.id} />
           ) : (
             <Home />
           )}

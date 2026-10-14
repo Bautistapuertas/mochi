@@ -9,7 +9,16 @@ import { createFolder, escapeQuery, FOLDER, list, rename, trash, update, type DF
 export const YEAR_NAMES = ['1er año', '2do año', '3er año', '4to año', '5to año', '6to año', '7mo año'];
 export const COLORS = ['#4c6ef5', '#12b886', '#f59f00', '#e64980', '#7950f2', '#15aabf', '#fa5252', '#74b816'];
 
-export type Folder = { id: string; name: string; parentId: string; parent?: Folder; materia: Materia; children: Folder[] };
+export type Folder = {
+  id: string;
+  name: string;
+  parentId: string;
+  parent?: Folder;
+  materia: Materia;
+  children: Folder[];
+  // Compartida con link (solo lectura).
+  compartido: boolean;
+};
 // Sin estado = materia que no estás cursando ni rendiste todavía.
 export type Estado = 'cursando' | 'final' | 'aprobada';
 export const ESTADOS: { key: Estado; label: string }[] = [
@@ -29,6 +38,7 @@ export type Materia = {
   nota?: number;
   // Ícono elegido a mano; si no hay, se elige solo por el nombre.
   icono?: string;
+  compartido: boolean;
   folders: Folder[];
 };
 export type Year = { id: string; name: string; order: number; materias: Materia[] };
@@ -71,6 +81,7 @@ export async function loadTree(): Promise<Tree> {
       aprobada: f.appProperties.estado === 'aprobada',
       nota: f.appProperties.nota ? Number(f.appProperties.nota) : undefined,
       icono: f.appProperties.icono,
+      compartido: f.appProperties.compartido === '1',
       folders: [],
     };
     materias.set(m.id, m);
@@ -96,6 +107,7 @@ export async function loadTree(): Promise<Tree> {
       id: f.id,
       name: f.name,
       parentId,
+      compartido: f.appProperties?.compartido === '1',
       parent: isFolder ? parent : undefined,
       materia: isFolder ? parent.materia : parent,
       children: [],

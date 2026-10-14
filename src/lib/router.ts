@@ -4,11 +4,12 @@
 //   #/buscar?q=     buscador
 //   #/fechas        próximas fechas
 //   #/yo            tu perfil, promedio y ajustes
+//   #/importar/<id> recibir apuntes que te compartieron
 //   ...?f=<id>      archivo abierto encima de cualquier pantalla
 
 import { useEffect, useState } from 'react';
 
-export type Route = { name: 'home' | 'materia' | 'search' | 'fechas' | 'yo'; id?: string; folder?: string; q?: string; file?: string };
+export type Route = { name: 'home' | 'materia' | 'search' | 'fechas' | 'yo' | 'importar'; id?: string; folder?: string; q?: string; file?: string };
 
 function split() {
   const [path, qs = ''] = location.hash.replace(/^#/, '').split('?');
@@ -23,6 +24,7 @@ export function parse(): Route {
   if (parts[0] === 'buscar') return { name: 'search', q: params.get('q') ?? '', file };
   if (parts[0] === 'fechas') return { name: 'fechas', file };
   if (parts[0] === 'yo') return { name: 'yo', file };
+  if (parts[0] === 'importar' && parts[1]) return { name: 'importar', id: parts[1] };
   return { name: 'home', file };
 }
 

@@ -213,3 +213,24 @@ export async function upload(file: File, parent: string, onProgress?: (fraction:
 export function escapeQuery(s: string) {
   return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
+
+// Compartir una carpeta "con cualquiera que tenga el link" (solo lectura).
+// Lo de adentro hereda el permiso, incluso lo que se agregue después.
+export async function shareFolder(id: string) {
+  await req(`${API}/files/${id}/permissions?fields=id`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'anyone', role: 'reader', allowFileDiscovery: false }),
+  });
+  return update(id, { appProperties: { compartido: '1' } });
+}
+
+export async function unshareFolder(id: string) {
+  const r: { permissions: { id: string; type: string }[] } = await (
+    await req(`${API}/files/${id}/permissions?fields=permissions(id,type)`)
+  ).json();
+  for (const p of r.permissions.filter((x) => x.type === 'anyone')) {
+    await req(`${API}/files/${id}/permissions/${p.id}`, { method: 'DELETE' });
+  }
+  return update(id, { appProperties: { compartido: null } });
+}

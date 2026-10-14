@@ -4,7 +4,7 @@ const ERRORS: Record<string, string> = {
   falta_drive: 'Para guardar tus apuntes, tenés que marcar la casilla de permiso de Google Drive.',
 };
 
-export default function Login() {
+export default function Login({ sharing = false }: { sharing?: boolean }) {
   const error = ERRORS[new URLSearchParams(location.search).get('error') ?? ''];
   return (
     <div className="min-h-dvh flex flex-col items-center justify-center px-6 py-12 text-center">
@@ -14,6 +14,12 @@ export default function Login() {
       <p className="text-muted mt-4 max-w-sm text-[17px] leading-relaxed">
         Ordenados por año y materia. Se guardan en tu Google Drive, así no se pierden y los ves desde la compu o el celu.
       </p>
+
+      {sharing && (
+        <p className="mt-6 max-w-sm bg-accent-soft text-ink rounded-2xl px-4 py-3 text-[15px]">
+          Un compañero te compartió apuntes. Entrá con tu cuenta de Google para guardarlos en tu Mochi.
+        </p>
+      )}
 
       {error && <p className="mt-6 max-w-sm bg-accent-soft text-ink rounded-2xl px-4 py-3 text-[15px]">{error}</p>}
 

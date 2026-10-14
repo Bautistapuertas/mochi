@@ -4,7 +4,9 @@ import { upload } from './drive';
 import { addFolder, type Tree } from './facu';
 
 // dirs = carpetas dentro de las que va el archivo, relativas al destino.
-export type UploadItem = { file: File; dirs: string[] };
+// Un archivo de la compu, o uno que se baja de otro lado recién cuando le toca subirse.
+export type RemoteFile = { name: string; size: number; load: () => Promise<File> };
+export type UploadItem = { file: File | RemoteFile; dirs: string[] };
 
 const JUNK = /^(\.|~\$)|^(desktop\.ini|thumbs\.db)$/i;
 const keep = (it: UploadItem) => !JUNK.test(it.file.name);
@@ -106,7 +108,8 @@ export async function uploadItems(
       const it = items[i];
       const parent = await ensure(it.dirs);
       report(it.file.name);
-      await upload(it.file, parent, (f) => {
+      const file = it.file instanceof File ? it.file : await it.file.load();
+      await upload(file, parent, (f) => {
         partial.set(i, f * it.file.size);
         report(it.file.name);
       });

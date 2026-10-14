@@ -34,6 +34,15 @@ andar, tus archivos siguen ahí, en carpetas normales.
    SESSION_SECRET=(ya está completo, no lo toques)
    ```
 
+## Clave de API (para compartir apuntes)
+
+Para que un compañero pueda recibir una carpeta compartida, Mochi necesita una clave de API:
+
+1. En <https://console.cloud.google.com/apis/credentials?project=facu-511514> tocá **Crear credenciales → Clave de API**.
+2. En la clave nueva, **Restricciones de aplicación → Sitios web**, agregá `https://mochi-facu.vercel.app/*` y `http://localhost:5173/*`.
+3. En **Restricciones de API**, elegí **Google Drive API**. Guardá.
+4. Pegala en `.env.local` como `VITE_GOOGLE_API_KEY=...` (y en Vercel, en las variables del proyecto).
+
 ## Usarla en la compu
 
 ```
