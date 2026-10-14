@@ -17,6 +17,11 @@ type Item =
 const memory: { items: Item[]; contents: Content[]; restantes: number | null } = { items: [], contents: [], restantes: null };
 
 export default function AsistenteScreen() {
+  return <Chat variant="page" />;
+}
+
+export function Chat({ variant, onClose }: { variant: 'page' | 'panel'; onClose?: () => void }) {
+  const panel = variant === 'panel';
   const { tree, reload, user } = useFacu();
   const [items, setItems] = useState<Item[]>(memory.items);
   const [busy, setBusy] = useState(false);
@@ -139,13 +144,21 @@ export default function AsistenteScreen() {
   ];
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 flex flex-col min-h-[calc(100dvh-6rem)] md:min-h-dvh safe-top">
-      <header className="flex items-center gap-3 pt-6 pb-4">
-        <span className="size-11 rounded-2xl bg-accent text-on-accent grid place-items-center shrink-0">
-          <Sparkles size={22} />
+    <div
+      className={
+        panel
+          ? 'flex flex-col h-full min-h-0'
+          : 'max-w-3xl mx-auto px-4 sm:px-6 flex flex-col min-h-[calc(100dvh-6rem)] md:min-h-dvh safe-top'
+      }
+    >
+      <header className={panel ? 'flex items-center gap-3 px-4 py-3 border-b border-line shrink-0' : 'flex items-center gap-3 pt-6 pb-4'}>
+        <span
+          className={`${panel ? 'size-9 rounded-xl' : 'size-11 rounded-2xl'} bg-accent text-on-accent grid place-items-center shrink-0`}
+        >
+          <Sparkles size={panel ? 18 : 22} />
         </span>
         <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-extrabold tracking-tight">Preguntale a Mochi</h1>
+          <h1 className={`${panel ? 'text-base' : 'text-xl'} font-extrabold tracking-tight`}>Preguntale a Mochi</h1>
           <p className="text-sm text-muted truncate">
             {restantes !== null ? `Te quedan ${restantes} preguntas hoy` : 'Consultá y ordená tus apuntes'}
           </p>
@@ -155,16 +168,21 @@ export default function AsistenteScreen() {
             <Plus width={18} height={18} /> Nueva
           </Button>
         )}
+        {panel && (
+          <button onClick={onClose} aria-label="Cerrar el chat" className="size-10 rounded-full grid place-items-center hover:bg-sunken shrink-0">
+            <Close />
+          </button>
+        )}
       </header>
 
-      <div className="flex-1 space-y-3 pb-4">
+      <div className={panel ? 'flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3' : 'flex-1 space-y-3 pb-4'}>
         {items.length === 0 && (
           <div className="py-6 fade-up">
             <p className="text-muted">
               Puedo buscar en tus apuntes, explicarte o resumir un PDF, tomarte preguntas, y también ordenar: crear carpetas,
               mover archivos, cargar fechas y notas. Antes de cambiar algo, te pregunto.
             </p>
-            <div className="grid sm:grid-cols-2 gap-2 mt-5">
+            <div className={`grid gap-2 mt-5 ${panel ? '' : 'sm:grid-cols-2'}`}>
               {ideas.map((i) => (
                 <button
                   key={i}
@@ -232,7 +250,7 @@ export default function AsistenteScreen() {
           e.preventDefault();
           send(text);
         }}
-        className="sticky bottom-20 md:bottom-4 pb-2 pt-2 bg-bg"
+        className={panel ? 'shrink-0 px-3 pt-2 pb-3 border-t border-line safe-bottom' : 'sticky bottom-20 md:bottom-4 pb-2 pt-2 bg-bg'}
       >
         <div className="flex items-end gap-2 rounded-3xl bg-surface border border-line focus-within:border-accent p-2 pl-4 shadow-sm">
           <textarea

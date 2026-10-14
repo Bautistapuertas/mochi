@@ -6,6 +6,7 @@ import { AuthError, currentUser, offlineMode } from './lib/drive';
 import { loadTree, type Tree } from './lib/facu';
 import { useRoute } from './lib/router';
 import Shell from './components/Shell';
+import MochiBubble from './components/MochiBubble';
 import FechasScreen from './screens/FechasScreen';
 import Home from './screens/Home';
 import YoScreen from './screens/YoScreen';
@@ -124,6 +125,7 @@ export default function App() {
           )}
         </Shell>
         {route.file && <Viewer key={route.file} id={route.file} />}
+        <MochiBubble route={route} />
         <OfflineBanner onBack={reload} />
       </ToastProvider>
     </FacuContext.Provider>
