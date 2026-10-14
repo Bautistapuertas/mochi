@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { ChevronRight, Folder, Logout, Share, Sun } from '../components/icons';
+import { MateriaBadge } from '../components/MateriaCover';
 import { useToast } from '../components/ui';
 import { useFacu } from '../lib/context';
 import { fmtNota, fmtPromedio } from '../lib/datos';
@@ -58,7 +59,7 @@ export default function YoScreen() {
           <div className="bg-surface border border-line rounded-3xl divide-y divide-line overflow-hidden">
             {aprobadas.map((m) => (
               <button key={m.id} onClick={() => go(`/m/${m.id}`)} className="w-full flex items-center gap-3 px-4 h-14 text-left hover:bg-sunken">
-                <span className="size-3 rounded-full shrink-0" style={{ background: m.color }} />
+                <MateriaBadge m={m} size={30} />
                 <span className="flex-1 truncate font-medium">{m.name}</span>
                 <span className="font-extrabold">{m.nota !== undefined ? fmtNota(m.nota) : <span className="text-muted font-medium text-sm">sin nota</span>}</span>
               </button>

@@ -27,6 +27,8 @@ export type Materia = {
   aprobada: boolean;
   // Nota final, si se cargó al aprobarla.
   nota?: number;
+  // Ícono elegido a mano; si no hay, se elige solo por el nombre.
+  icono?: string;
   folders: Folder[];
 };
 export type Year = { id: string; name: string; order: number; materias: Materia[] };
@@ -68,6 +70,7 @@ export async function loadTree(): Promise<Tree> {
       estado: (['cursando', 'final', 'aprobada'] as const).find((e) => e === f.appProperties!.estado),
       aprobada: f.appProperties.estado === 'aprobada',
       nota: f.appProperties.nota ? Number(f.appProperties.nota) : undefined,
+      icono: f.appProperties.icono,
       folders: [],
     };
     materias.set(m.id, m);
@@ -125,6 +128,8 @@ export const setEstado = (m: Materia, estado: Estado | null, nota?: number) =>
   update(m.id, {
     appProperties: { estado, nota: estado === 'aprobada' && nota !== undefined ? String(nota) : null },
   });
+
+export const setIcono = (m: Materia, icono: string | null) => update(m.id, { appProperties: { icono } });
 
 export const setAprobada = (m: Materia, aprobada: boolean, nota?: number) =>
   setEstado(m, aprobada ? 'aprobada' : 'cursando', nota);

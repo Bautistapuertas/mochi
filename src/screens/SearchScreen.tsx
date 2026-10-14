@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import FileRow from '../components/FileRow';
+import { MateriaBadge } from '../components/MateriaCover';
 import { Back, SearchIcon } from '../components/icons';
 import { IconButton, Spinner } from '../components/ui';
 import { useFacu } from '../lib/context';
@@ -64,9 +65,7 @@ export default function SearchScreen({ initial }: { initial: string }) {
               onClick={() => go(`/m/${m.id}`)}
               className="h-10 pl-2 pr-4 rounded-full bg-surface border border-line flex items-center gap-2 font-semibold text-sm hover:bg-sunken"
             >
-              <span className="size-6 rounded-full grid place-items-center text-white text-xs" style={{ background: m.color }}>
-                {m.name.charAt(0).toUpperCase()}
-              </span>
+              <MateriaBadge m={m} size={26} />
               {m.name}
             </button>
           ))}

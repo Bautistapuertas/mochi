@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useFacu } from '../lib/context';
 import { fmtNota, fmtPromedio, whenLabel } from '../lib/datos';
-import { ESTADOS, setEstado, upcomingExams, type Estado, type Materia } from '../lib/facu';
+import { ESTADOS, setEstado, setIcono, upcomingExams, type Estado, type Materia } from '../lib/facu';
+import { ICONS, guessIcon, iconKey } from '../lib/materiaIcon';
+import { MateriaBadge } from './MateriaCover';
 import { MateriaExams } from './Exams';
 import { ApproveModal, MateriaGrades } from './Grades';
 import { Calendar, ChevronRight, Note } from './icons';
@@ -61,11 +63,75 @@ export function MateriaInfoModal({ m, onClose }: { m: Materia; onClose: () => vo
     <Modal title={m.name} onClose={onClose}>
       <h3 className="font-semibold mb-2">Estado</h3>
       <EstadoPicker m={m} />
+      <h3 className="font-semibold mt-6 mb-2">Ícono</h3>
+      <IconPicker m={m} />
       <h3 className="font-semibold mt-6 mb-2">Fechas</h3>
       <MateriaExams materiaId={m.id} />
       <h3 className="font-semibold mb-2">Notas</h3>
       <MateriaGrades materiaId={m.id} />
     </Modal>
+  );
+}
+
+// Por defecto el ícono se elige solo por el nombre; acá se puede cambiar.
+function IconPicker({ m }: { m: Materia }) {
+  const { reload } = useFacu();
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const current = iconKey(m);
+  const auto = guessIcon(m.name);
+
+  async function pick(key: string | null) {
+    setBusy(true);
+    try {
+      await setIcono(m, key);
+      await reload();
+      setOpen(false);
+    } catch (e) {
+      toast(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!open)
+    return (
+      <button onClick={() => setOpen(true)} className="w-full flex items-center gap-3 p-2 -mx-2 rounded-2xl hover:bg-sunken text-left">
+        <MateriaBadge m={m} size={44} />
+        <span className="flex-1">
+          <span className="font-semibold block">{ICONS[current].label}</span>
+          <span className="text-sm text-muted">{m.icono ? 'Elegido por vos' : 'Elegido según el nombre'}</span>
+        </span>
+        <span className="text-sm font-semibold text-accent">Cambiar</span>
+      </button>
+    );
+
+  return (
+    <div>
+      <div className="grid grid-cols-6 gap-2">
+        {Object.entries(ICONS).map(([key, { icon: Icon, label }]) => (
+          <button
+            key={key}
+            disabled={busy}
+            title={label}
+            aria-label={label}
+            onClick={() => pick(key === auto ? null : key)}
+            className={`aspect-square rounded-xl grid place-items-center transition ${
+              key === current ? 'text-white' : 'bg-sunken text-muted hover:text-ink'
+            }`}
+            style={key === current ? { background: m.color } : undefined}
+          >
+            <Icon size={20} strokeWidth={2} />
+          </button>
+        ))}
+      </div>
+      {m.icono && (
+        <button disabled={busy} onClick={() => pick(null)} className="mt-3 text-sm font-semibold text-muted hover:text-ink">
+          Volver al automático ({ICONS[auto].label})
+        </button>
+      )}
+    </div>
   );
 }
 

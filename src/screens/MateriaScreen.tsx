@@ -15,7 +15,8 @@ import {
   Trash,
   UploadIcon,
 } from '../components/icons';
-import { MateriaInfoModal, MateriaSummary, estadoLabel } from '../components/MateriaInfo';
+import { MateriaBadge, MateriaCover } from '../components/MateriaCover';
+import { MateriaInfoModal, MateriaSummary } from '../components/MateriaInfo';
 import MoveModal from '../components/MoveModal';
 import UploadSheet from '../components/UploadSheet';
 import { Button, ConfirmModal, IconButton, Menu, Modal, PromptModal, errorText, useToast, type MenuItem } from '../components/ui';
@@ -415,17 +416,9 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
                 onClick={() => openFolder()}
                 className={`text-left rounded-2xl p-2 -m-2 transition ${over ? 'bg-accent-soft ring-2 ring-accent' : ''}`}
               >
-                <span
-                  className="size-11 rounded-2xl grid place-items-center text-white text-lg font-extrabold mb-3"
-                  style={{ background: m.color }}
-                >
-                  {m.name.charAt(0).toUpperCase()}
-                </span>
+                <MateriaCover m={m} className="h-24 rounded-2xl mb-3" />
                 <h1 className="text-xl font-extrabold tracking-tight leading-tight">{m.name}</h1>
-                <p className="text-sm text-muted mt-0.5">
-                  {year?.name}
-                  {estadoLabel(m) && <span className="text-accent font-semibold"> · {estadoLabel(m)}</span>}
-                </p>
+                <p className="text-sm text-muted mt-0.5">{year?.name}</p>
               </button>
             )}
           </DropTarget>
@@ -464,7 +457,7 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
                 <div className="flex-1 min-w-0">{searchBox(true)}</div>
               ) : (
                 <button onClick={() => openFolder()} className="flex-1 min-w-0 flex items-center gap-2 text-left">
-                  <span className="size-3 rounded-full shrink-0" style={{ background: m.color }} />
+                  <MateriaBadge m={m} size={28} />
                   <span className="font-bold text-[17px] truncate">{m.name}</span>
                 </button>
               )}

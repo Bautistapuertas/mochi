@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import FileRow from '../components/FileRow';
 import { Check, ChevronRight, Folder as FolderIcon, Plus, SearchIcon, Pencil, Trash } from '../components/icons';
 import { UpcomingExams } from '../components/Exams';
+import { MateriaBadge, MateriaCover } from '../components/MateriaCover';
 import { daysUntil, fmtNota, fmtPromedio, whenLabel } from '../lib/datos';
 import UploadSheet from '../components/UploadSheet';
 import { itemsFromDrop, itemsFromInput, summarize, type UploadItem } from '../lib/upload';
@@ -278,13 +279,17 @@ function MateriaCard({ m, year }: { m: Materia; year?: Year }) {
   return (
     <button
       onClick={() => go(`/m/${m.id}`)}
-      className="group relative text-left bg-surface border border-line rounded-2xl p-4 pl-5 min-h-24 flex flex-col overflow-hidden hover:-translate-y-0.5 hover:shadow-md active:scale-[.98] transition"
+      className="group text-left bg-surface border border-line rounded-2xl flex flex-col overflow-hidden hover:-translate-y-0.5 hover:shadow-md active:scale-[.98] transition"
     >
-      <span className="absolute inset-y-0 left-0 w-1.5" style={{ background: m.color }} />
-      {year && <span className="text-xs font-semibold text-muted mb-1">{year.name}</span>}
-      <span className="font-bold leading-snug line-clamp-2">{m.name}</span>
-      <span className={`mt-auto pt-2 text-xs font-semibold truncate ${n !== null && n <= 3 ? 'text-accent' : 'text-muted'}`}>
-        {next ? `${next.title} · ${whenLabel(next.date).toLowerCase()}` : ' '}
+      <MateriaCover m={m} className="h-20 shrink-0" />
+      <span className="flex flex-col flex-1 p-3.5 pt-3">
+        {year && <span className="text-xs font-semibold text-muted mb-0.5">{year.name}</span>}
+        <span className="font-bold leading-snug line-clamp-2">{m.name}</span>
+        {next && (
+          <span className={`mt-auto pt-2 text-xs font-semibold truncate ${n !== null && n <= 3 ? 'text-accent' : 'text-muted'}`}>
+            {next.title} · {whenLabel(next.date).toLowerCase()}
+          </span>
+        )}
       </span>
     </button>
   );
@@ -341,7 +346,7 @@ function CursandoPicker({ onClose }: { onClose: () => void }) {
                       }}
                       className="size-5 accent-[var(--accent)]"
                     />
-                    <span className="size-3 rounded-full shrink-0" style={{ background: m.color }} />
+                    <MateriaBadge m={m} size={26} />
                     <span className="font-medium truncate">{m.name}</span>
                     {m.estado === 'final' && <span className="ml-auto text-xs text-muted">final pendiente</span>}
                   </label>
