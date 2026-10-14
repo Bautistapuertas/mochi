@@ -3,7 +3,7 @@
 // Año y materia se marcan con appProperties (así no importa si se renombran).
 // Adentro de la materia, las carpetas son libres y pueden tener subcarpetas.
 
-import { loadDatos, daysUntil, type Exam, type Grade } from './datos';
+import { loadDatos, daysUntil, type Entrega, type Exam, type Grade } from './datos';
 import { createFolder, escapeQuery, FOLDER, list, rename, trash, update, type DFile } from './drive';
 
 export const YEAR_NAMES = ['1er año', '2do año', '3er año', '4to año', '5to año', '6to año', '7mo año'];
@@ -51,6 +51,7 @@ export type Tree = {
   folders: Map<string, Folder>;
   exams: Exam[];
   grades: Grade[];
+  entregas: Entrega[];
 };
 // folder vacío = archivo suelto en la materia.
 export type FileItem = DFile & { materia: Materia; folder?: Folder };
@@ -122,7 +123,7 @@ export async function loadTree(): Promise<Tree> {
   for (const f of folders.values()) f.children.sort(byName);
 
   const datos = await loadDatos(root.id);
-  return { rootId: root.id, rootLink: root.webViewLink, years, materias, folders, exams: datos.exams, grades: datos.grades ?? [] };
+  return { rootId: root.id, rootLink: root.webViewLink, years, materias, folders, exams: datos.exams, grades: datos.grades ?? [], entregas: datos.entregas ?? [] };
 }
 
 const yearName = (index: number) => YEAR_NAMES[index] ?? `Año ${index + 1}`;
@@ -157,6 +158,13 @@ export function upcomingExams(tree: Tree, materiaId?: string) {
   return tree.exams
     .filter((e) => daysUntil(e.date) >= 0 && (!materiaId || e.materiaId === materiaId))
     .filter((e) => { const m = tree.materias.get(e.materiaId); return m && !m.aprobada; })
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// Entregas sin entregar de materias que no están aprobadas: las atrasadas y la más cercana primero.
+export function pendingEntregas(tree: Tree) {
+  return tree.entregas
+    .filter((e) => !e.done && !tree.materias.get(e.materiaId)?.aprobada && tree.materias.has(e.materiaId))
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 

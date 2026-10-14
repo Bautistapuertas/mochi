@@ -12,6 +12,7 @@
   --color-accent-soft: var(--accent-soft);
   --color-on-accent: var(--on-accent);
   --color-danger: var(--danger);
+  --color-success: var(--success);
 }
 
 :root {
@@ -25,6 +26,7 @@
   --accent-soft: #ffe8e6;
   --on-accent: #ffffff;
   --danger: #b02525;
+  --success: #2f9e44;
   color-scheme: light;
 }
 
@@ -41,6 +43,7 @@
     --accent-soft: #3a1f20;
     --on-accent: #0c0d12;
     --danger: #ff8787;
+    --success: #40c057;
     color-scheme: dark;
   }
 }
@@ -56,6 +59,7 @@
   --accent-soft: #3a1f20;
   --on-accent: #0c0d12;
   --danger: #ff8787;
+  --success: #40c057;
   color-scheme: dark;
 }
 

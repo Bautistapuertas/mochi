@@ -1,14 +1,15 @@
 import { useEffect, type ReactNode } from 'react';
 import { useFacu } from '../lib/context';
-import { upcomingExams } from '../lib/facu';
+import { daysUntil } from '../lib/datos';
+import { pendingEntregas, upcomingExams } from '../lib/facu';
 import { go, type Route } from '../lib/router';
-import { Sparkles } from 'lucide-react';
+import { ClipboardCheck } from 'lucide-react';
 import { Calendar, HomeIcon, SearchIcon, UserIcon } from './icons';
 
 const ITEMS = [
   { key: 'home', label: 'Inicio', path: '/', icon: HomeIcon },
   { key: 'search', label: 'Buscar', path: '/buscar', icon: SearchIcon },
-  { key: 'ia', label: 'Preguntar', path: '/ia', icon: Sparkles },
+  { key: 'entregas', label: 'Entregas', path: '/entregas', icon: ClipboardCheck },
   { key: 'fechas', label: 'Fechas', path: '/fechas', icon: Calendar },
   { key: 'yo', label: 'Vos', path: '/yo', icon: UserIcon },
 ] as const;
@@ -17,11 +18,13 @@ const ITEMS = [
 export default function Shell({ route, children }: { route: Route; children: ReactNode }) {
   const { tree, user } = useFacu();
   const active = route.name === 'materia' ? 'home' : route.name;
-  // Puntito en "Fechas" si hay algo en los próximos 3 días.
+  // Puntito en "Fechas" si hay algo en los próximos 3 días, y en "Entregas" si vence algo en 2 días o está atrasado.
   const soon = upcomingExams(tree).some((e) => {
     const [y, m, d] = e.date.split('-').map(Number);
     return (new Date(y, m - 1, d).getTime() - Date.now()) / 86_400_000 <= 3;
   });
+  const due = pendingEntregas(tree).some((e) => daysUntil(e.date) <= 2);
+  const dots: Record<string, boolean> = { fechas: soon, entregas: due };
 
   // Ctrl+K o "/" para buscar desde cualquier lado.
   useEffect(() => {
@@ -44,7 +47,7 @@ export default function Shell({ route, children }: { route: Route; children: Rea
           <img src="/icon.svg" alt="" className="size-10 rounded-xl" />
         </button>
         {ITEMS.map((it) => (
-          <NavButton key={it.key} item={it} on={active === it.key} dot={it.key === 'fechas' && soon} avatar={it.key === 'yo' ? user?.picture : undefined} />
+          <NavButton key={it.key} item={it} on={active === it.key} dot={!!dots[it.key]} avatar={it.key === 'yo' ? user?.picture : undefined} />
         ))}
       </nav>
 
@@ -56,7 +59,7 @@ export default function Shell({ route, children }: { route: Route; children: Rea
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-surface/95 backdrop-blur border-t border-line safe-bottom !pb-[max(0.25rem,env(safe-area-inset-bottom))]">
         <div className="flex">
           {ITEMS.map((it) => (
-            <NavButton key={it.key} item={it} on={active === it.key} dot={it.key === 'fechas' && soon} avatar={it.key === 'yo' ? user?.picture : undefined} />
+            <NavButton key={it.key} item={it} on={active === it.key} dot={!!dots[it.key]} avatar={it.key === 'yo' ? user?.picture : undefined} />
           ))}
         </div>
       </nav>

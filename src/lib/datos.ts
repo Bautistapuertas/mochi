@@ -1,4 +1,4 @@
-// Datos chicos de la app (fechas de parciales) en un archivo JSON dentro de la carpeta Facultad.
+// Datos chicos de la app (fechas de parciales, notas y entregas) en un archivo JSON dentro de la carpeta Facultad.
 // Así se ven igual en la compu y en el celu.
 
 import { DEMO, createTextFile, download, list, saveContent } from './drive';
@@ -6,9 +6,11 @@ import { getList, isNetworkError, putList } from './offline';
 
 export type Exam = { id: string; materiaId: string; title: string; date: string /* AAAA-MM-DD */ };
 export type Grade = { id: string; materiaId: string; title: string; nota: number };
-export type Datos = { version: 1; exams: Exam[]; grades: Grade[] };
+// Una tarea para entregar (TP, actividad, informe). "done" = ya entregada.
+export type Entrega = { id: string; materiaId: string; title: string; desc?: string; date: string; done: boolean };
+export type Datos = { version: 1; exams: Exam[]; grades: Grade[]; entregas: Entrega[] };
 
-const empty = (): Datos => ({ version: 1, exams: [], grades: [] });
+const empty = (): Datos => ({ version: 1, exams: [], grades: [], entregas: [] });
 let fileId: string | null = null;
 let demoDatos: Datos | null = null;
 
@@ -22,6 +24,12 @@ function demoSample(): Datos {
       { id: 'e3', materiaId: 'm1', title: 'Final', date: inDays(40) },
     ],
     grades: [{ id: 'g1', materiaId: 'm1', title: 'TP 1', nota: 9 }],
+    entregas: [
+      { id: 't1', materiaId: 'm1', title: 'Actividad grupal de la semana', desc: 'Layout + navegación del TP', date: inDays(1), done: false },
+      { id: 't2', materiaId: 'm4', title: 'TP Individual', desc: 'Red neuronal simple', date: inDays(6), done: false },
+      { id: 't3', materiaId: 'm5', title: 'Informe de laboratorio', date: inDays(-2), done: false },
+      { id: 't4', materiaId: 'm1', title: 'Actividad individual de la semana', desc: 'Librería en React', date: inDays(-5), done: true },
+    ],
   };
 }
 

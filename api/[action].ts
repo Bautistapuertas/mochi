@@ -146,12 +146,12 @@ const IA_COOKIE = 'mochi_ia';
 const IA_MODELS = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-2.5-flash-lite'];
 
 const IA_SYSTEM = `Sos Mochi, el asistente de una app de apuntes de la facultad. Hablás en español rioplatense (vos), claro y breve.
-Ayudás a encontrar, entender y ordenar los apuntes del usuario, y a manejar sus fechas de parciales, notas y materias.
+Ayudás a encontrar, entender y ordenar los apuntes del usuario, y a manejar sus fechas de parciales, entregas (TPs, actividades), notas y materias.
 
 Cómo trabajar:
 - Para responder sobre los apuntes, primero buscalos o abrilos con las herramientas. No inventes contenido: si no está en los apuntes, decilo.
 - Cuando uses información de un archivo, mencioná de qué archivo sale.
-- Para cambiar algo (crear carpetas, mover, renombrar, cargar fechas o notas, cambiar el estado de una materia) usá la herramienta correspondiente. La app le pide confirmación al usuario antes de aplicarlo, así que no hace falta que preguntes antes.
+- Para cambiar algo (crear carpetas, mover, renombrar, cargar fechas, entregas o notas, marcar entregas como entregadas, cambiar el estado de una materia) usá la herramienta correspondiente. La app le pide confirmación al usuario antes de aplicarlo, así que no hace falta que preguntes antes.
 - No podés borrar nada. Si te lo piden, explicá que se borra desde la app (menú de tres puntos → Eliminar).
 - Usá los ids que devuelven las herramientas; nunca los inventes. Si hay varias materias o carpetas posibles, preguntá cuál.
 - Para fechas, usá el formato AAAA-MM-DD. Tené en cuenta la fecha de hoy que figura en el contexto.
@@ -191,7 +191,7 @@ const IA_TOOLS = [
       },
       {
         name: 'ver_fechas_y_notas',
-        description: 'Devuelve las próximas fechas (parciales, finales, entregas) y las notas cargadas.',
+        description: 'Devuelve las próximas fechas de parciales y finales, las entregas (TPs, actividades; pendientes y entregadas, con su id) y las notas cargadas.',
         parameters: { type: 'object', properties: {} },
       },
       {
@@ -230,7 +230,7 @@ const IA_TOOLS = [
       },
       {
         name: 'agregar_fecha',
-        description: 'Carga una fecha (parcial, final, entrega) en una materia.',
+        description: 'Carga una fecha de parcial, recuperatorio o final en una materia.',
         parameters: {
           type: 'object',
           properties: {
@@ -239,6 +239,32 @@ const IA_TOOLS = [
             fecha: prop('string', 'Fecha en formato AAAA-MM-DD'),
           },
           required: ['materia_id', 'titulo', 'fecha'],
+        },
+      },
+      {
+        name: 'agregar_entrega',
+        description: 'Anota algo para entregar (TP, actividad, informe) en una materia. Usalo para entregas; agregar_fecha es para parciales y finales.',
+        parameters: {
+          type: 'object',
+          properties: {
+            materia_id: prop('string', 'Id de la materia'),
+            titulo: prop('string', 'Ej: TP 2, Actividad grupal de la semana'),
+            detalle: prop('string', 'Opcional: de qué se trata'),
+            fecha: prop('string', 'Fecha de entrega en formato AAAA-MM-DD'),
+          },
+          required: ['materia_id', 'titulo', 'fecha'],
+        },
+      },
+      {
+        name: 'marcar_entregada',
+        description: 'Marca una entrega como entregada (o de nuevo como pendiente).',
+        parameters: {
+          type: 'object',
+          properties: {
+            entrega_id: prop('string', 'Id de la entrega (de ver_fechas_y_notas)'),
+            entregada: prop('boolean', 'true = entregada (por defecto), false = pendiente'),
+          },
+          required: ['entrega_id'],
         },
       },
       {

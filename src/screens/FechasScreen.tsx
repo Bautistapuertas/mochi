@@ -22,7 +22,7 @@ export default function FechasScreen() {
       <header className="flex items-center justify-between pt-6 pb-5">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight">Fechas</h1>
-          <p className="text-sm text-muted mt-0.5">Parciales, finales y entregas</p>
+          <p className="text-sm text-muted mt-0.5">Parciales, recuperatorios y finales</p>
         </div>
         <Button variant="primary" onClick={() => setEditing('new')}>
           <Plus /> Agregar

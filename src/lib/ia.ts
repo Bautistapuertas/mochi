@@ -29,7 +29,7 @@ export type Content = { role: 'user' | 'model'; parts: Part[] };
 export type Call = { name: string; args: Record<string, unknown> };
 
 // Las que cambian algo: la app pide confirmación antes de aplicarlas.
-export const CHANGES = new Set(['crear_carpeta', 'mover_archivos', 'renombrar', 'agregar_fecha', 'agregar_nota', 'cambiar_estado']);
+export const CHANGES = new Set(['crear_carpeta', 'mover_archivos', 'renombrar', 'agregar_fecha', 'agregar_nota', 'cambiar_estado', 'agregar_entrega', 'marcar_entregada']);
 
 export class IaError extends Error {
   constructor(
@@ -115,6 +115,10 @@ export function describe(tree: Tree, c: Call): string {
     }
     case 'agregar_fecha':
       return `Agregar **${str(c.args.titulo)}** de ${m?.name ?? 'la materia'} el **${str(c.args.fecha).split('-').reverse().join('/')}**`;
+    case 'agregar_entrega':
+      return `Anotar la entrega **${str(c.args.titulo)}** de ${m?.name ?? 'la materia'} para el **${str(c.args.fecha).split('-').reverse().join('/')}**`;
+    case 'marcar_entregada':
+      return `Marcar **${tree.entregas.find((e) => e.id === str(c.args.entrega_id))?.title ?? 'la entrega'}** como ${c.args.entregada === false ? 'pendiente' : 'entregada'}`;
     case 'agregar_nota':
       return `Cargar **${str(c.args.titulo)}: ${fmtNota(Number(c.args.nota))}** en ${m?.name ?? 'la materia'}`;
     case 'cambiar_estado': {
@@ -235,6 +239,17 @@ export async function runTool(tree: Tree, c: Call): Promise<unknown> {
           fecha: e.date,
           faltan_dias: daysUntil(e.date),
         })),
+        entregas: tree.entregas
+          .filter((e) => !e.done || daysUntil(e.date) > -30)
+          .map((e) => ({
+            id: e.id,
+            materia: tree.materias.get(e.materiaId)?.name,
+            titulo: e.title,
+            detalle: e.desc,
+            fecha: e.date,
+            faltan_dias: daysUntil(e.date),
+            entregada: e.done,
+          })),
         notas: tree.grades.map((g) => ({ materia: tree.materias.get(g.materiaId)?.name, titulo: g.title, nota: g.nota })),
       };
     case 'crear_carpeta': {
@@ -268,6 +283,24 @@ export async function runTool(tree: Tree, c: Call): Promise<unknown> {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) throw new Error('La fecha tiene que tener el formato AAAA-MM-DD.');
       await updateDatos(tree.rootId, (d) => {
         d.exams.push({ id: crypto.randomUUID(), materiaId: m.id, title: str(a.titulo), date: fecha });
+      });
+      return { ok: true };
+    }
+    case 'agregar_entrega': {
+      const m = findMateria(tree, a.materia_id);
+      const fecha = str(a.fecha);
+      if (!/^d{4}-d{2}-d{2}$/.test(fecha)) throw new Error('La fecha tiene que tener el formato AAAA-MM-DD.');
+      await updateDatos(tree.rootId, (d) => {
+        d.entregas.push({ id: crypto.randomUUID(), materiaId: m.id, title: str(a.titulo), desc: a.detalle ? str(a.detalle) : undefined, date: fecha, done: false });
+      });
+      return { ok: true };
+    }
+    case 'marcar_entregada': {
+      const id = str(a.entrega_id);
+      if (!tree.entregas.some((e) => e.id === id)) throw new Error('No existe esa entrega. Usá ver_fechas_y_notas para ver los ids.');
+      await updateDatos(tree.rootId, (d) => {
+        const e = d.entregas.find((x) => x.id === id);
+        if (e) e.done = a.entregada !== false;
       });
       return { ok: true };
     }

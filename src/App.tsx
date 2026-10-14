@@ -8,6 +8,7 @@ import { useRoute } from './lib/router';
 import Shell from './components/Shell';
 import MochiBubble from './components/MochiBubble';
 import FechasScreen from './screens/FechasScreen';
+import EntregasScreen from './screens/EntregasScreen';
 import Home from './screens/Home';
 import YoScreen from './screens/YoScreen';
 import ImportScreen from './screens/ImportScreen';
@@ -114,6 +115,8 @@ export default function App() {
             <SearchScreen initial={route.q ?? ''} />
           ) : route.name === 'fechas' ? (
             <FechasScreen />
+          ) : route.name === 'entregas' ? (
+            <EntregasScreen />
           ) : route.name === 'yo' ? (
             <YoScreen />
           ) : route.name === 'ia' ? (

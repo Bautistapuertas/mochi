@@ -5,7 +5,7 @@ import { upcomingExams } from '../lib/facu';
 import { Calendar, Check, Plus } from './icons';
 import { Button, Modal, errorText } from './ui';
 
-const SUGGESTIONS = ['Parcial 1', 'Parcial 2', 'Recuperatorio', 'Final', 'Entrega TP'];
+const SUGGESTIONS = ['Parcial 1', 'Parcial 2', 'Recuperatorio', 'Final', 'Coloquio'];
 
 // Crear, editar o borrar una fecha.
 export function ExamModal({ exam, materiaId, onClose }: { exam?: Exam; materiaId?: string; onClose: () => void }) {
@@ -115,7 +115,7 @@ export function ExamModal({ exam, materiaId, onClose }: { exam?: Exam; materiaId
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="O escribilo: Coloquio, TP 3…"
+          placeholder="O escribilo: Parcial integrador…"
           className="w-full h-12 px-4 rounded-xl bg-sunken border border-transparent focus:border-accent outline-none text-base mb-4"
         />
 
