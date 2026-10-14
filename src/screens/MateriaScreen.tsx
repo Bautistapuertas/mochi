@@ -38,7 +38,7 @@ import {
 import { keepOffline } from '../lib/fileBlob';
 import { baseName, cleanNames, naturalCompare } from '../lib/files';
 import { offlineIds } from '../lib/offline';
-import { go, setViewerList } from '../lib/router';
+import { go, setLastMateria, setViewerList } from '../lib/router';
 import { itemsFromDrop, itemsFromInput, mergeSameName, type UploadItem } from '../lib/upload';
 
 type Sort = 'nombre' | 'recientes';
@@ -89,6 +89,8 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
   const fileInput = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => setLastMateria(id), [id]);
 
   // React no conoce el atributo para elegir carpetas.
   useEffect(() => {

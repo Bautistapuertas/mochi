@@ -2,11 +2,13 @@ import { useEffect, type ReactNode } from 'react';
 import { useFacu } from '../lib/context';
 import { upcomingExams } from '../lib/facu';
 import { go, type Route } from '../lib/router';
+import { Sparkles } from 'lucide-react';
 import { Calendar, HomeIcon, SearchIcon, UserIcon } from './icons';
 
 const ITEMS = [
   { key: 'home', label: 'Inicio', path: '/', icon: HomeIcon },
   { key: 'search', label: 'Buscar', path: '/buscar', icon: SearchIcon },
+  { key: 'ia', label: 'Preguntar', path: '/ia', icon: Sparkles },
   { key: 'fechas', label: 'Fechas', path: '/fechas', icon: Calendar },
   { key: 'yo', label: 'Vos', path: '/yo', icon: UserIcon },
 ] as const;

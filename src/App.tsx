@@ -10,6 +10,7 @@ import FechasScreen from './screens/FechasScreen';
 import Home from './screens/Home';
 import YoScreen from './screens/YoScreen';
 import ImportScreen from './screens/ImportScreen';
+import AsistenteScreen from './screens/AsistenteScreen';
 import Login from './screens/Login';
 import MateriaScreen from './screens/MateriaScreen';
 import SearchScreen from './screens/SearchScreen';
@@ -114,6 +115,8 @@ export default function App() {
             <FechasScreen />
           ) : route.name === 'yo' ? (
             <YoScreen />
+          ) : route.name === 'ia' ? (
+            <AsistenteScreen />
           ) : route.name === 'importar' && route.id ? (
             <ImportScreen id={route.id} />
           ) : (

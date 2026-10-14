@@ -14,7 +14,13 @@ function apiDev(): Plugin {
           const mod = await server.ssrLoadModule('/api/[action].ts');
           const headers = new Headers();
           for (const [k, v] of Object.entries(req.headers)) if (typeof v === 'string') headers.set(k, v);
-          const r: Response = await mod.GET(new Request(`http://${req.headers.host}${req.url}`, { headers }));
+          // Mismo manejo que Vercel: GET o POST según el pedido.
+          const chunks: Buffer[] = [];
+          for await (const c of req) chunks.push(c as Buffer);
+          const method = req.method === 'POST' ? 'POST' : 'GET';
+          const init: RequestInit = { method, headers };
+          if (method === 'POST') init.body = Buffer.concat(chunks);
+          const r: Response = await mod[method](new Request(`http://${req.headers.host}${req.url}`, init));
           res.statusCode = r.status;
           r.headers.forEach((v, k) => {
             if (k !== 'set-cookie') res.setHeader(k, v);

@@ -7,6 +7,7 @@ import { fmtNota, fmtPromedio } from '../lib/datos';
 import { promedio } from '../lib/facu';
 import { go } from '../lib/router';
 import { getTheme, setTheme, type Theme } from '../lib/theme';
+import { ownKey, setOwnKey } from '../lib/ia';
 
 // Tu perfil: cómo vas en la carrera y los ajustes de la app.
 export default function YoScreen() {
@@ -95,6 +96,8 @@ export default function YoScreen() {
         </div>
       </section>
 
+      <GeminiKey />
+
       <section className="bg-surface border border-line rounded-3xl divide-y divide-line overflow-hidden">
         <Row icon={<Share />} label="Invitar a un compañero" onClick={invite} />
         {tree.rootLink && <Row icon={<Folder />} label="Ver mis apuntes en Google Drive" href={tree.rootLink} />}
@@ -102,6 +105,64 @@ export default function YoScreen() {
         <Row icon={<Logout />} label="Cerrar sesión" href="/api/logout" danger />
       </section>
     </div>
+  );
+}
+
+// Clave propia de Gemini: sin el límite diario compartido. Se guarda solo en este dispositivo.
+function GeminiKey() {
+  const toast = useToast();
+  const [saved, setSaved] = useState(() => !!ownKey());
+  const [value, setValue] = useState('');
+  return (
+    <section className="mb-8">
+      <h2 className="text-sm font-bold text-muted mb-2">Preguntale a Mochi</h2>
+      <div className="bg-surface border border-line rounded-3xl p-4">
+        {saved ? (
+          <div className="flex items-center gap-3">
+            <p className="flex-1 text-[15px]">Estás usando tu propia clave de Gemini: no tenés límite diario.</p>
+            <button
+              onClick={() => {
+                setOwnKey('');
+                setSaved(false);
+              }}
+              className="text-sm font-semibold text-danger shrink-0"
+            >
+              Quitar
+            </button>
+          </div>
+        ) : (
+          <>
+            <p className="text-[15px] text-muted">
+              Con la clave de Mochi tenés unas preguntas por día. Si querés más, creá tu propia clave gratis en{' '}
+              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="text-accent font-semibold underline">
+                Google AI Studio
+              </a>{' '}
+              y pegala acá. Se guarda solo en este dispositivo.
+            </p>
+            <form
+              className="flex gap-2 mt-3"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!value.trim()) return;
+                setOwnKey(value);
+                setValue('');
+                setSaved(true);
+                toast('Listo, ahora usás tu propia clave');
+              }}
+            >
+              <input
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                placeholder="AIza…"
+                autoComplete="off"
+                className="flex-1 min-w-0 h-11 px-4 rounded-xl bg-sunken border border-transparent focus:border-accent outline-none"
+              />
+              <button className="h-11 px-4 rounded-xl bg-accent text-on-accent font-semibold">Guardar</button>
+            </form>
+          </>
+        )}
+      </div>
+    </section>
   );
 }
 
