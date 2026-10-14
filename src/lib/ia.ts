@@ -262,6 +262,8 @@ export async function runTool(tree: Tree, c: Call): Promise<unknown> {
         porcentaje: p.porcentaje,
         aprobadas: `${p.aprobadas} de ${p.obligatorias} obligatorias`,
         electivas_horas: `${p.horasElectivas} de ${ELECTIVAS_HORAS}`,
+        // No hay que hacer todas las electivas: alcanza con sumar las horas que pide cada nivel.
+        electivas_por_nivel: p.electivasPorNivel.map((x) => ({ nivel: x.nivel, horas_que_pide: x.pide, horas_hechas: x.hechas })),
         pps_hecha: p.pps,
         materias: p.rows.map((r) => ({
           nombre: r.name,

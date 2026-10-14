@@ -8,6 +8,7 @@ import { promedio, setEstado, type Estado } from '../lib/facu';
 import {
   CARRERA,
   ELECTIVAS_HORAS,
+  ELECTIVAS_NIVEL,
   NIVELES,
   PLAN_NOMBRE,
   PPS,
@@ -102,10 +103,10 @@ export default function CarreraScreen() {
         <span className={`flex-1 min-w-0 truncate ${s === 'bloqueada' ? 'text-muted' : 'font-semibold'}`}>{r.name}</span>
         <span
           className={`text-sm shrink-0 ${
-            s === 'aprobada' ? 'text-success font-bold' : s === 'final' ? 'text-amber-500 font-semibold' : s === 'cursando' || s === 'libre' ? 'text-accent font-semibold' : 'text-muted'
+            s === 'aprobada' ? 'text-success font-bold' : s === 'final' ? 'text-amber-500 font-semibold' : s === 'cursando' || (s === 'libre' && !r.electiva) ? 'text-accent font-semibold' : 'text-muted'
           }`}
         >
-          {s === 'aprobada' && r.nota !== undefined ? fmtNota(r.nota) : LABEL[s]}
+          {s === 'aprobada' && r.nota !== undefined ? fmtNota(r.nota) : r.electiva && !r.state ? `${r.horas} hs` : LABEL[s]}
         </span>
       </button>
     );
@@ -177,33 +178,44 @@ export default function CarreraScreen() {
         );
       })}
 
-      <section className="mb-6">
-        <button
-          onClick={() => setOpenLevels({ ...openLevels, 9: !openLevels[9] })}
-          aria-expanded={!!openLevels[9]}
-          className="w-full flex items-center gap-2 mb-2 text-left"
-        >
-          <ChevronRight width={16} height={16} className={`text-muted transition ${openLevels[9] ? 'rotate-90' : ''}`} />
-          <h2 className="text-sm font-bold text-muted flex-1">Electivas</h2>
-          <span className={`text-sm font-bold ${p.horasElectivas >= ELECTIVAS_HORAS ? 'text-success' : 'text-muted'}`}>
-            {p.horasElectivas} de {ELECTIVAS_HORAS} hs
-          </span>
-        </button>
-        {/* Las electivas que ya marcaste se ven siempre; el resto, al desplegar. */}
-        {(() => {
-          const shown = openLevels[9] ? electivas : electivas.filter((r) => r.state);
-          if (!shown.length)
-            return (
+      {p.electivasPorNivel.map(({ nivel, pide, hechas, completo }) => {
+        const key = 10 + nivel;
+        const all = electivas.filter((r) => r.nivel === nivel);
+        const mine = all.filter((r) => r.state);
+        const open = !!openLevels[key];
+        // Desplegado: todas las opciones. Plegado: solo las que elegiste.
+        const shown = open ? all : mine;
+        return (
+          <section key={key} className="mb-6">
+            <button
+              onClick={() => setOpenLevels({ ...openLevels, [key]: !open })}
+              aria-expanded={open}
+              className="w-full flex items-center gap-2 mb-1 text-left"
+            >
+              <ChevronRight width={16} height={16} className={`text-muted transition ${open ? 'rotate-90' : ''}`} />
+              <h2 className="text-sm font-bold text-muted flex-1">Electivas de {NIVELES[nivel - 1].toLowerCase()}</h2>
+              <span className={`text-sm font-bold ${completo ? 'text-success' : 'text-muted'}`}>
+                {completo ? 'Completo' : `${hechas} de ${pide} hs`}
+              </span>
+            </button>
+            <p className="text-sm text-muted mb-2 pl-6">
+              {completo
+                ? `Ya sumaste las ${pide} hs que pide el plan.`
+                : `No hace falta hacerlas todas: elegí las que quieras hasta sumar ${pide} hs${pide === 4 ? ' (por ejemplo, dos de 2 hs)' : ''}.`}
+            </p>
+            {shown.length ? (
+              <div className="bg-surface border border-line rounded-3xl divide-y divide-line overflow-hidden">{shown.map(row)}</div>
+            ) : (
               <button
-                onClick={() => setOpenLevels({ ...openLevels, 9: true })}
-                className="w-full rounded-3xl border-2 border-dashed border-line px-4 py-4 text-muted text-left hover:border-accent transition"
+                onClick={() => setOpenLevels({ ...openLevels, [key]: true })}
+                className="w-full rounded-3xl border-2 border-dashed border-line px-4 py-3 text-muted text-left hover:border-accent transition"
               >
-                Tocá para ver las {electivas.length} electivas y marcar las que hiciste.
+                Ver las {all.length} opciones y marcar las que hiciste
               </button>
-            );
-          return <div className="bg-surface border border-line rounded-3xl divide-y divide-line overflow-hidden">{shown.map(row)}</div>;
-        })()}
-      </section>
+            )}
+          </section>
+        );
+      })}
 
       <section>
         <div className="bg-surface border border-line rounded-3xl overflow-hidden">
@@ -274,6 +286,7 @@ function PlanModal({ row, byCode, onClose }: { row: PlanRow; byCode: Map<string,
       <p className="text-sm text-muted -mt-2 mb-4">
         {row.electiva ? 'Electiva · ' : ''}
         {NIVELES[row.nivel - 1]}
+        {row.electiva && ` · ${row.horas} hs (el nivel pide ${ELECTIVAS_NIVEL[row.nivel]} hs en total)`}
       </p>
 
       {reqs.length > 0 && (

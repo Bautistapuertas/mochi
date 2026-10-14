@@ -93,7 +93,9 @@ export const PLAN: PlanItem[] = [
   e('E20', 5, 'Emprendedorismo', 2, '18-24'),
 ];
 
-// Horas de electivas que pide el plan (3º: 4, 4º: 6, 5º: 10).
+// Horas de electivas que pide el plan en cada nivel. No hay que hacerlas todas: alcanza con sumar esas horas
+// (en 3º, 4 hs = dos electivas de 2 hs).
+export const ELECTIVAS_NIVEL: Record<number, number> = { 3: 4, 4: 6, 5: 10 };
 export const ELECTIVAS_HORAS = 20;
 export const PPS = 'PPS';
 // La Práctica Profesional Supervisada (200 hs reloj) pesa en el porcentaje como una materia anual.
@@ -172,10 +174,12 @@ export function progress(tree: Tree) {
   const obligatorias = rows.filter((r) => !r.electiva);
   const electivas = rows.filter((r) => r.electiva);
   const total = obligatorias.reduce((a, r) => a + r.horas, 0) + ELECTIVAS_HORAS + PPS_PESO;
-  const horasElectivas = Math.min(
-    ELECTIVAS_HORAS,
-    electivas.filter((r) => done(r.state)).reduce((a, r) => a + r.horas, 0),
-  );
+  const porNivel = Object.entries(ELECTIVAS_NIVEL).map(([n, pide]) => {
+    const hechas = electivas.filter((r) => r.nivel === Number(n) && done(r.state)).reduce((a, r) => a + r.horas, 0);
+    return { nivel: Number(n), pide, hechas, completo: hechas >= pide };
+  });
+  // Cada nivel suma como mucho lo que pide: hacer electivas de más no adelanta la carrera.
+  const horasElectivas = porNivel.reduce((a, x) => a + Math.min(x.pide, x.hechas), 0);
   const pps = tree.plan[PPS]?.estado === 'aprobada';
   const hechas = obligatorias.filter((r) => done(r.state)).reduce((a, r) => a + r.horas, 0) + horasElectivas + (pps ? PPS_PESO : 0);
   return {
@@ -185,6 +189,7 @@ export function progress(tree: Tree) {
     regulares: obligatorias.filter((r) => r.state === 'final').length,
     obligatorias: obligatorias.length,
     horasElectivas,
+    electivasPorNivel: porNivel,
     pps,
   };
 }
