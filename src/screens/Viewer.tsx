@@ -192,7 +192,7 @@ export default function Viewer({ id }: { id: string }) {
         {kind === 'pdf' && <PdfView blob={blob} />}
         {kind === 'word' && <DocxView blob={blob} />}
         {kind === 'excel' && <SheetView blob={blob} />}
-        {kind === 'image' && <ImageView blob={blob} name={file.name} />}
+        {kind === 'image' && <ImageView blob={blob} name={file.name} thumbnail={file.thumbnailLink} onOpenDrive={openInDrive} />}
       </Suspense>
     );
 

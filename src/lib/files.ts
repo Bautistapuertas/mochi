@@ -36,7 +36,7 @@ export function canPreview(f: { name: string; mimeType: string }) {
   const k = kindOf(f);
   const e = extOf(f.name);
   if (k === 'word') return e === 'docx';
-  if (k === 'image') return e !== 'heic';
+  if (k === 'image') return true;
   return k === 'pdf' || k === 'excel';
 }
 

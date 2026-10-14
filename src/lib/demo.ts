@@ -52,8 +52,21 @@ export function demoList(q: string): DFile[] {
 }
 
 // Un PDF chiquito de 3 páginas armado a mano, para probar el lector sin cuenta.
-export function demoBlob(id: string): Blob {
+export async function demoBlob(id: string): Promise<Blob> {
   const f = demoFiles.find((x) => x.id === id);
+  // Las imágenes de prueba son una foto dibujada en el momento (como una foto real del celu).
+  if (f && /.(jpe?g|png)$/i.test(f.name)) {
+    const c = new OffscreenCanvas(1600, 1200);
+    const g = c.getContext('2d')!;
+    g.fillStyle = '#2f4f3a';
+    g.fillRect(0, 0, 1600, 1200);
+    g.fillStyle = '#f5f5f0';
+    g.font = 'bold 90px sans-serif';
+    g.fillText('Pizarrón de prueba', 120, 300);
+    g.font = '60px sans-serif';
+    g.fillText('SELECT * FROM alumnos;', 120, 500);
+    return c.convertToBlob({ type: 'image/jpeg', quality: 0.9 });
+  }
   const title = (f?.name ?? 'Demo').replace(/[()\\]/g, '').normalize('NFD').replace(/[^\x20-\x7e]/g, '');
   const objs: string[] = ['<< /Type /Catalog /Pages 2 0 R >>', ''];
   const kids: string[] = [];
