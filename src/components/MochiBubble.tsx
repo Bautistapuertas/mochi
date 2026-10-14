@@ -38,7 +38,7 @@ export default function MochiBubble({ route }: { route: Route }) {
       )}
       {mounted && (
         <div className={open ? '' : 'hidden'}>
-          <div className="fixed inset-0 z-[55] bg-black/30 md:hidden" onClick={() => setOpen(false)} />
+          <div className="fixed inset-0 z-[55] bg-black/30 md:bg-transparent" onClick={() => setOpen(false)} />
           <div
             role="dialog"
             aria-label="Preguntale a Mochi"

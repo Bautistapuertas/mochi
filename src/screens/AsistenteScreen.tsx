@@ -270,9 +270,6 @@ export function Chat({ variant, onClose }: { variant: 'page' | 'panel'; onClose?
             <Sparkles size={20} />
           </Button>
         </div>
-        <p className="text-[11px] text-muted text-center mt-1.5">
-          Funciona con Gemini (Google). Lo que preguntes y los apuntes que lea se envían a Google para responder.
-        </p>
       </form>
     </div>
   );
