@@ -4,6 +4,7 @@
 // Adentro de la materia, las carpetas son libres y pueden tener subcarpetas.
 
 import { loadDatos, daysUntil, type Entrega, type Exam, type Grade } from './datos';
+import { planRows, type PlanMark } from './plan';
 import { createFolder, escapeQuery, FOLDER, list, rename, trash, update, type DFile } from './drive';
 
 export const YEAR_NAMES = ['1er año', '2do año', '3er año', '4to año', '5to año', '6to año', '7mo año'];
@@ -52,6 +53,7 @@ export type Tree = {
   exams: Exam[];
   grades: Grade[];
   entregas: Entrega[];
+  plan: Record<string, PlanMark>;
 };
 // folder vacío = archivo suelto en la materia.
 export type FileItem = DFile & { materia: Materia; folder?: Folder };
@@ -123,7 +125,7 @@ export async function loadTree(): Promise<Tree> {
   for (const f of folders.values()) f.children.sort(byName);
 
   const datos = await loadDatos(root.id);
-  return { rootId: root.id, rootLink: root.webViewLink, years, materias, folders, exams: datos.exams, grades: datos.grades ?? [], entregas: datos.entregas ?? [] };
+  return { rootId: root.id, rootLink: root.webViewLink, years, materias, folders, exams: datos.exams, grades: datos.grades ?? [], entregas: datos.entregas ?? [], plan: datos.plan ?? {} };
 }
 
 const yearName = (index: number) => YEAR_NAMES[index] ?? `Año ${index + 1}`;
@@ -147,9 +149,10 @@ export const setIcono = (m: Materia, icono: string | null) => update(m.id, { app
 export const setAprobada = (m: Materia, aprobada: boolean, nota?: number) =>
   setEstado(m, aprobada ? 'aprobada' : 'cursando', nota);
 
-// Promedio de la carrera con las notas finales cargadas.
+// Promedio de la carrera con las notas finales cargadas (en tus materias y en el plan de la carrera).
 export function promedio(tree: Tree) {
   const notas = [...tree.materias.values()].filter((m) => m.aprobada && m.nota !== undefined).map((m) => m.nota!);
+  for (const r of planRows(tree)) if (!r.materia?.estado && r.state === 'aprobada' && r.nota !== undefined) notas.push(r.nota);
   return notas.length ? { valor: notas.reduce((a, b) => a + b, 0) / notas.length, cantidad: notas.length } : null;
 }
 

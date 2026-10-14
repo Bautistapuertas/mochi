@@ -9,6 +9,7 @@ import Shell from './components/Shell';
 import MochiBubble from './components/MochiBubble';
 import FechasScreen from './screens/FechasScreen';
 import EntregasScreen from './screens/EntregasScreen';
+import CarreraScreen from './screens/CarreraScreen';
 import Home from './screens/Home';
 import YoScreen from './screens/YoScreen';
 import ImportScreen from './screens/ImportScreen';
@@ -117,6 +118,8 @@ export default function App() {
             <FechasScreen />
           ) : route.name === 'entregas' ? (
             <EntregasScreen />
+          ) : route.name === 'carrera' ? (
+            <CarreraScreen />
           ) : route.name === 'yo' ? (
             <YoScreen />
           ) : route.name === 'ia' ? (

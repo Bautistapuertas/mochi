@@ -3,7 +3,7 @@ import { useFacu } from '../lib/context';
 import { daysUntil } from '../lib/datos';
 import { pendingEntregas, upcomingExams } from '../lib/facu';
 import { go, type Route } from '../lib/router';
-import { ClipboardCheck } from 'lucide-react';
+import { ClipboardCheck, GraduationCap } from 'lucide-react';
 import { Calendar, HomeIcon, SearchIcon, UserIcon } from './icons';
 
 const ITEMS = [
@@ -11,6 +11,7 @@ const ITEMS = [
   { key: 'search', label: 'Buscar', path: '/buscar', icon: SearchIcon },
   { key: 'entregas', label: 'Entregas', path: '/entregas', icon: ClipboardCheck },
   { key: 'fechas', label: 'Fechas', path: '/fechas', icon: Calendar },
+  { key: 'carrera', label: 'Carrera', path: '/carrera', icon: GraduationCap },
   { key: 'yo', label: 'Vos', path: '/yo', icon: UserIcon },
 ] as const;
 

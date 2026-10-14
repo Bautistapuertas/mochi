@@ -195,6 +195,11 @@ const IA_TOOLS = [
         parameters: { type: 'object', properties: {} },
       },
       {
+        name: 'ver_carrera',
+        description: 'Devuelve el plan de estudios (Ingeniería en Sistemas, UTN FRLP, plan 2023): porcentaje de la carrera, estado de cada materia y qué correlativas le faltan para cursar cada una.',
+        parameters: { type: 'object', properties: {} },
+      },
+      {
         name: 'crear_carpeta',
         description: 'Crea una carpeta dentro de una materia, o dentro de otra carpeta.',
         parameters: {

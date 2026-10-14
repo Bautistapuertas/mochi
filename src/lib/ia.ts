@@ -17,6 +17,7 @@ import {
   type Tree,
 } from './facu';
 import { fileBlob } from './fileBlob';
+import { ELECTIVAS_HORAS, missing, progress } from './plan';
 import { baseName, extOf, kindOf } from './files';
 
 export type Part = {
@@ -141,6 +142,8 @@ export function activity(c: Call) {
       return 'Mirando los archivos';
     case 'listar_materias':
       return 'Mirando tus materias';
+    case 'ver_carrera':
+      return 'Mirando tu plan de estudios';
     case 'ver_fechas_y_notas':
       return 'Mirando tus fechas y notas';
   }
@@ -252,6 +255,24 @@ export async function runTool(tree: Tree, c: Call): Promise<unknown> {
           })),
         notas: tree.grades.map((g) => ({ materia: tree.materias.get(g.materiaId)?.name, titulo: g.title, nota: g.nota })),
       };
+    case 'ver_carrera': {
+      const p = progress(tree);
+      const byCode = new Map(p.rows.map((r) => [r.code, r]));
+      return {
+        porcentaje: p.porcentaje,
+        aprobadas: `${p.aprobadas} de ${p.obligatorias} obligatorias`,
+        electivas_horas: `${p.horasElectivas} de ${ELECTIVAS_HORAS}`,
+        pps_hecha: p.pps,
+        materias: p.rows.map((r) => ({
+          nombre: r.name,
+          nivel: r.nivel,
+          electiva: r.electiva || undefined,
+          estado: r.state === 'final' ? 'regular (falta final)' : (r.state ?? 'sin hacer'),
+          nota: r.nota,
+          le_falta_para_cursar: r.state ? undefined : missing(r, byCode).map((x) => `${x.row.name} (${x.need === 'regular' ? 'cursada' : 'aprobada'})`),
+        })),
+      };
+    }
     case 'crear_carpeta': {
       const m = findMateria(tree, a.materia_id);
       const parent = a.dentro_de_carpeta_id ? str(a.dentro_de_carpeta_id) : m.id;

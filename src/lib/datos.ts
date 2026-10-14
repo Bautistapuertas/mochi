@@ -1,6 +1,7 @@
 // Datos chicos de la app (fechas de parciales, notas y entregas) en un archivo JSON dentro de la carpeta Facultad.
 // Así se ven igual en la compu y en el celu.
 
+import type { PlanMark } from './plan';
 import { DEMO, createTextFile, download, list, saveContent } from './drive';
 import { getList, isNetworkError, putList } from './offline';
 
@@ -8,9 +9,10 @@ export type Exam = { id: string; materiaId: string; title: string; date: string 
 export type Grade = { id: string; materiaId: string; title: string; nota: number };
 // Una tarea para entregar (TP, actividad, informe). "done" = ya entregada.
 export type Entrega = { id: string; materiaId: string; title: string; desc?: string; date: string; done: boolean };
-export type Datos = { version: 1; exams: Exam[]; grades: Grade[]; entregas: Entrega[] };
+// plan: estado de las materias del plan que no tienen carpeta (por código del plan).
+export type Datos = { version: 1; exams: Exam[]; grades: Grade[]; entregas: Entrega[]; plan: Record<string, PlanMark> };
 
-const empty = (): Datos => ({ version: 1, exams: [], grades: [], entregas: [] });
+const empty = (): Datos => ({ version: 1, exams: [], grades: [], entregas: [], plan: {} });
 let fileId: string | null = null;
 let demoDatos: Datos | null = null;
 
@@ -24,6 +26,7 @@ function demoSample(): Datos {
       { id: 'e3', materiaId: 'm1', title: 'Final', date: inDays(40) },
     ],
     grades: [{ id: 'g1', materiaId: 'm1', title: 'TP 1', nota: 9 }],
+    plan: { '1': { estado: 'aprobada', nota: 7 }, '2': { estado: 'aprobada', nota: 9 }, '4': { estado: 'aprobada' }, '6': { estado: 'aprobada', nota: 8 }, '8': { estado: 'final' }, '5': { estado: 'aprobada', nota: 6 }, '14': { estado: 'final' }, '16': { estado: 'final' }, '13': { estado: 'aprobada', nota: 8 } },
     entregas: [
       { id: 't1', materiaId: 'm1', title: 'Actividad grupal de la semana', desc: 'Layout + navegación del TP', date: inDays(1), done: false },
       { id: 't2', materiaId: 'm4', title: 'TP Individual', desc: 'Red neuronal simple', date: inDays(6), done: false },
