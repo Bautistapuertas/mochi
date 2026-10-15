@@ -1,12 +1,8 @@
-# Mochi
+# Configuración
 
-App para tener los apuntes de la facultad ordenados por **año → materia → carpetas**.
-Publicada en <https://mochi-facu.vercel.app>.
+Pasos para poner Mochi a andar con tu propia cuenta de Google. Lo que hace la app está en el [README](../README.md).
 
 **Publicar cambios:** todo lo que se sube a la rama `main` de GitHub se publica solo en Vercel.
-
-Todo se guarda en tu Google Drive, en la carpeta **Facultad**. Si algún día la app deja de
-andar, tus archivos siguen ahí, en carpetas normales.
 
 ## Configurar Google (una sola vez)
 
@@ -51,18 +47,9 @@ npm run dev
 
 y abrí <http://localhost:5173>.
 
-## Qué tiene la app
-
-- **Inicio:** las materias que estás cursando (de cualquier año), finales pendientes, todas las materias por año y las aprobadas.
-- **Materia:** carpetas libres con subcarpetas, cuadraditos con vista previa, búsqueda adentro de los PDF y Word,
-  seleccionar varios archivos, mover arrastrando, fechas y notas de la materia.
-- **Fechas:** parciales, finales y entregas, con link para agregarlos a Google Calendar.
-- **Vos:** promedio, notas finales, tema claro u oscuro, invitar compañeros.
-- **Sin conexión:** los archivos que guardes con "Guardar sin conexión" se abren sin internet.
-
 ## Cosas para saber
 
 - Lo que borres va a la **papelera de Google Drive** y se puede recuperar durante 30 días.
 - La app solo ve los archivos que subiste desde la app, no el resto de tu Drive.
-- Las fechas y notas están en el archivo `Mochi - fechas.json` de la carpeta Facultad. No lo borres.
+- Las fechas, notas, entregas y el avance de la carrera están en el archivo `Mochi - fechas.json` de la carpeta Facultad. No lo borres.
 - Para probar la app sin cuenta: `npm run dev` y abrí <http://localhost:5173/?demo> (datos de prueba, solo en la compu).

@@ -6,3 +6,7 @@ dev-dist
 # Claves: nunca se suben
 .env*
 !.env.example
+
+# Archivos de compilación y del editor
+*.tsbuildinfo
+.claude/
