@@ -71,7 +71,7 @@ async function req(url: string, init: RequestInit = {}, retry = true): Promise<R
   if (!r.ok) {
     const text = await r.text();
     if (/accessNotConfigured|SERVICE_DISABLED|has not been used/.test(text))
-      throw new Error('Falta habilitar la Google Drive API en Google Cloud (ver LEEME.md, paso 3). Si recién la habilitaste, esperá un minuto.');
+      throw new Error('Falta habilitar la Google Drive API en Google Cloud (ver docs/CONFIGURACION.md, paso 3). Si recién la habilitaste, esperá un minuto.');
     if (r.status === 403 && /storageQuotaExceeded/.test(text)) throw new Error('Tu Google Drive está lleno.');
     throw new Error(`Error de Drive (${r.status}): ${text.slice(0, 200)}`);
   }

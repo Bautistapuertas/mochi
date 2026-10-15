@@ -13,7 +13,7 @@ const dec = new TextDecoder();
 
 function env(name: string) {
   const v = process.env[name];
-  if (!v) throw new Error(`Falta la variable ${name} (ver LEEME.md)`);
+  if (!v) throw new Error(`Falta la variable ${name} (ver docs/CONFIGURACION.md)`);
   return v;
 }
 

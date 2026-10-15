@@ -10,7 +10,7 @@ const API = 'https://www.googleapis.com/drive/v3';
 export const sharingReady = () => !!KEY;
 
 async function get(url: string) {
-  if (!KEY) throw new Error('Falta configurar la clave de API de Google (ver LEEME.md).');
+  if (!KEY) throw new Error('Falta configurar la clave de API de Google (ver docs/CONFIGURACION.md).');
   const r = await fetch(`${url}${url.includes('?') ? '&' : '?'}key=${KEY}`);
   if (r.status === 404 || r.status === 403)
     throw new Error('No se pudo abrir. Puede que la dejaron de compartir o que el link esté mal.');
