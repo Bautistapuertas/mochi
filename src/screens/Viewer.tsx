@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import MoveModal from '../components/MoveModal';
-import { Back, ChevronLeft, ChevronRight, Download, External, Move, Offline, Pencil, Trash } from '../components/icons';
+import { Back, ChevronLeft, ChevronRight, Download, External, Move, Offline, Pencil, Share, Trash } from '../components/icons';
+import { canSendToApp, sendFiles } from '../lib/send';
 import { Button, ConfirmModal, FileBadge, IconButton, Menu, PromptModal, Spinner, errorText, useToast } from '../components/ui';
 import { notifyChanged, useFacu } from '../lib/context';
 import { fileCache, getFile, rename, trash, type DFile } from '../lib/drive';
@@ -130,6 +131,16 @@ export default function Viewer({ id }: { id: string }) {
     }
   }
 
+  // En el celu: abre el menú de compartir del teléfono (para mandarlo a Claude, WhatsApp…).
+  async function onSend() {
+    if (!file) return;
+    try {
+      await sendFiles([file]);
+    } catch (e) {
+      toast(errorText(e));
+    }
+  }
+
   const openInDrive = () => file?.webViewLink && open(file.webViewLink, '_blank');
 
   // Los dibujos se abren en excalidraw.com: se descarga el archivo y se abre Excalidraw en otra pestaña.
@@ -223,11 +234,18 @@ export default function Viewer({ id }: { id: string }) {
         )}
         {file && (
           <>
-            <IconButton label="Descargar" onClick={onDownload}>
-              <Download />
-            </IconButton>
+            {canSendToApp() ? (
+              <IconButton label="Enviar a otra app" onClick={onSend}>
+                <Share />
+              </IconButton>
+            ) : (
+              <IconButton label="Descargar" onClick={onDownload}>
+                <Download />
+              </IconButton>
+            )}
             <Menu
               items={[
+                ...(canSendToApp() ? [{ label: 'Descargar', icon: <Download />, onClick: onDownload }] : []),
                 {
                   label: isOffline ? 'Quitar de sin conexión' : 'Guardar sin conexión',
                   icon: <Offline />,

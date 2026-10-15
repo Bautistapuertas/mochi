@@ -5,6 +5,7 @@ import {
   Camera,
   ChevronRight,
   Close,
+  Download,
   External,
   Folder as FolderIcon,
   Move,
@@ -36,6 +37,7 @@ import {
   type Materia,
 } from '../lib/facu';
 import { keepOffline } from '../lib/fileBlob';
+import { canSendToApp, sendFiles } from '../lib/send';
 import { baseName, cleanNames, naturalCompare } from '../lib/files';
 import { offlineIds } from '../lib/offline';
 import { go, setLastMateria, setViewerList } from '../lib/router';
@@ -251,6 +253,19 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
       toast(errorText(e));
     } finally {
       offlineIds().then(setOffline);
+    }
+  }
+
+  // Para usarlos en otra app (por ejemplo, mandárselos a Claude): en el celu se comparten, en la compu se descargan.
+  async function sendSelected() {
+    const list = selectedFiles;
+    try {
+      const r = await sendFiles(list, (i, n) => n > 1 && toast(`Preparando ${i + 1} de ${n}…`));
+      if (r === 'downloaded')
+        toast(list.length === 1 ? 'Descargado. Arrastralo al chat donde lo necesites.' : `Se descargaron ${list.length} archivos. Arrastralos al chat donde los necesites.`);
+      if (r !== 'cancelled') clearSelection();
+    } catch (e) {
+      toast(errorText(e));
     }
   }
 
@@ -571,6 +586,10 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
               <span className="hidden sm:inline"> {selected.size === 1 ? 'seleccionado' : 'seleccionados'}</span>
             </span>
             <BarButton onClick={() => setSelected(new Set(here.list.map((f) => f.id)))}>Todos</BarButton>
+            <BarButton disabled={!selected.size} onClick={sendSelected} label={canSendToApp() ? 'Enviar a otra app' : 'Descargar'}>
+              {canSendToApp() ? <Share width={18} height={18} /> : <Download width={18} height={18} />}
+              <span className="hidden sm:inline">{canSendToApp() ? 'Enviar' : 'Descargar'}</span>
+            </BarButton>
             <BarButton disabled={!selected.size} onClick={() => setBulk('move')}>
               <Move width={18} height={18} /> Mover
             </BarButton>
