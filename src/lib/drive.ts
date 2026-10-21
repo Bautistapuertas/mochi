@@ -2,7 +2,7 @@
 
 import { getList, isNetworkError, putList } from './offline';
 
-const API = 'https://www.googleapis.com/drive/v3';
+export const API = 'https://www.googleapis.com/drive/v3';
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
 export const FOLDER = 'application/vnd.google-apps.folder';
 const FIELDS = 'id,name,mimeType,modifiedTime,size,parents,appProperties,webViewLink,thumbnailLink';
@@ -61,7 +61,7 @@ export function getToken(): Promise<string> {
   return pending;
 }
 
-async function req(url: string, init: RequestInit = {}, retry = true): Promise<Response> {
+export async function req(url: string, init: RequestInit = {}, retry = true): Promise<Response> {
   const token = await getToken();
   const r = await fetch(url, { ...init, headers: { ...init.headers, Authorization: `Bearer ${token}` } });
   if (r.status === 401 && retry) {
@@ -216,21 +216,3 @@ export function escapeQuery(s: string) {
 
 // Compartir una carpeta "con cualquiera que tenga el link" (solo lectura).
 // Lo de adentro hereda el permiso, incluso lo que se agregue después.
-export async function shareFolder(id: string) {
-  await req(`${API}/files/${id}/permissions?fields=id`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ type: 'anyone', role: 'reader', allowFileDiscovery: false }),
-  });
-  return update(id, { appProperties: { compartido: '1' } });
-}
-
-export async function unshareFolder(id: string) {
-  const r: { permissions: { id: string; type: string }[] } = await (
-    await req(`${API}/files/${id}/permissions?fields=permissions(id,type)`)
-  ).json();
-  for (const p of r.permissions.filter((x) => x.type === 'anyone')) {
-    await req(`${API}/files/${id}/permissions/${p.id}`, { method: 'DELETE' });
-  }
-  return update(id, { appProperties: { compartido: null } });
-}

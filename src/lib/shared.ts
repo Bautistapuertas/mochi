@@ -3,6 +3,7 @@
 // "públicos" con una clave de API (restringida a este sitio en Google Cloud).
 
 import { FOLDER, type DFile } from './drive';
+import type { ShareManifest } from './share';
 
 const KEY = import.meta.env.VITE_GOOGLE_API_KEY as string | undefined;
 const API = 'https://www.googleapis.com/drive/v3';
@@ -21,14 +22,27 @@ async function get(url: string) {
 export type SharedInfo = { id: string; name: string; owner?: string };
 export type SharedEntry = { file: DFile; dirs: string[] };
 
+// Si se compartió archivo por archivo, el link apunta a un índice con la lista.
+const manifests = new Map<string, ShareManifest>();
+
 export async function sharedInfo(id: string): Promise<SharedInfo> {
   const f = await (await get(`${API}/files/${id}?fields=id,name,mimeType,owners(displayName)`)).json();
-  if (f.mimeType !== FOLDER) throw new Error('El link no es de una carpeta.');
-  return { id: f.id, name: f.name, owner: f.owners?.[0]?.displayName };
+  const owner = f.owners?.[0]?.displayName;
+  if (f.mimeType === FOLDER) return { id: f.id, name: f.name, owner };
+  if (f.mimeType === 'application/json') {
+    const m = (await (await get(`${API}/files/${id}?alt=media`)).json().catch(() => null)) as ShareManifest | null;
+    if (m?.mochi === 'share') {
+      manifests.set(id, m);
+      return { id, name: m.name, owner };
+    }
+  }
+  throw new Error('El link no es de algo compartido desde Mochi.');
 }
 
 // Todos los archivos de la carpeta compartida, con el camino de subcarpetas.
 export async function sharedFiles(id: string, dirs: string[] = []): Promise<SharedEntry[]> {
+  const m = manifests.get(id);
+  if (m) return m.files.map((f) => ({ file: { id: f.id, name: f.name, mimeType: f.mimeType, size: f.size, modifiedTime: '' }, dirs: f.dirs }));
   const out: SharedEntry[] = [];
   let pageToken = '';
   do {

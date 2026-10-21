@@ -19,6 +19,8 @@ export type Folder = {
   children: Folder[];
   // Compartida con link (solo lectura).
   compartido: boolean;
+  // Lo que va en el link: el id de la carpeta, o el del índice si se compartió archivo por archivo.
+  shareId?: string;
 };
 // Sin estado = materia que no estás cursando ni rendiste todavía.
 export type Estado = 'cursando' | 'final' | 'aprobada';
@@ -40,6 +42,8 @@ export type Materia = {
   // Ícono elegido a mano; si no hay, se elige solo por el nombre.
   icono?: string;
   compartido: boolean;
+  // Lo que va en el link: el id de la carpeta, o el del índice si se compartió archivo por archivo.
+  shareId?: string;
   folders: Folder[];
 };
 export type Year = { id: string; name: string; order: number; materias: Materia[] };
@@ -84,7 +88,8 @@ export async function loadTree(): Promise<Tree> {
       aprobada: f.appProperties.estado === 'aprobada',
       nota: f.appProperties.nota ? Number(f.appProperties.nota) : undefined,
       icono: f.appProperties.icono,
-      compartido: f.appProperties.compartido === '1',
+      compartido: !!f.appProperties.compartido,
+      shareId: f.appProperties.compartido === '1' ? f.id : f.appProperties.compartido || undefined,
       folders: [],
     };
     materias.set(m.id, m);
@@ -110,7 +115,8 @@ export async function loadTree(): Promise<Tree> {
       id: f.id,
       name: f.name,
       parentId,
-      compartido: f.appProperties?.compartido === '1',
+      compartido: !!f.appProperties?.compartido,
+      shareId: f.appProperties?.compartido === '1' ? f.id : f.appProperties?.compartido || undefined,
       parent: isFolder ? parent : undefined,
       materia: isFolder ? parent.materia : parent,
       children: [],

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useFacu } from '../lib/context';
-import { shareFolder, unshareFolder } from '../lib/drive';
+import { refreshShare, shareTarget, unshareTarget } from '../lib/share';
 import { shareLink } from '../lib/shared';
 import { Check, Share } from './icons';
 import { Button, Modal, errorText, useToast } from './ui';
@@ -10,16 +10,20 @@ export default function ShareModal({
   target,
   onClose,
 }: {
-  target: { id: string; name: string; compartido: boolean };
+  target: { id: string; name: string; compartido: boolean; shareId?: string };
   onClose: () => void;
 }) {
-  const { reload } = useFacu();
+  const { tree, reload } = useFacu();
   const toast = useToast();
   const [shared, setShared] = useState(target.compartido);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
-  const link = shareLink(target.id);
+  const [shareId, setShareId] = useState(target.shareId ?? target.id);
+  // Compartido archivo por archivo (había archivos que no se subieron desde Mochi): hay que actualizarlo a mano.
+  const [count, setCount] = useState<number | null>(null);
+  const byFile = shareId !== target.id;
+  const link = shareLink(shareId);
 
   async function run(fn: () => Promise<unknown>, next: boolean) {
     setBusy(true);
@@ -68,7 +72,13 @@ export default function ShareModal({
             </ul>
           </div>
           {error && <p className="text-danger mt-3 text-[15px]">{error}</p>}
-          <Button variant="primary" className="w-full mt-5" disabled={busy} onClick={() => run(() => shareFolder(target.id), true)}>
+          <Button variant="primary" className="w-full mt-5" disabled={busy} onClick={() =>
+              run(async () => {
+                const r = await shareTarget(target, tree.rootId);
+                setShareId(r.shareId);
+                setCount(r.count ?? null);
+              }, true)
+            }>
             {busy ? 'Creando link…' : 'Crear link para compartir'}
           </Button>
         </>
@@ -92,10 +102,36 @@ export default function ShareModal({
               <Share /> Mandar por WhatsApp u otra app
             </Button>
           )}
+          {byFile && (
+            <div className="mt-4 rounded-2xl bg-sunken p-4 text-[15px]">
+              <p className="text-muted">
+                {count !== null ? `Se compartieron los ${count} archivos que hay ahora.` : 'Se comparten los archivos que había cuando creaste el link.'} Si
+                agregás más, tocá <b className="text-ink">Sumar lo nuevo</b>. Los archivos que pusiste desde la página de Drive (no desde Mochi) no se incluyen.
+              </p>
+              <Button
+                className="w-full mt-3"
+                disabled={busy}
+                onClick={() =>
+                  run(async () => {
+                    const n = await refreshShare(target, tree.rootId, shareId);
+                    setCount(n);
+                    toast(`Link actualizado: ${n} archivos`);
+                  }, true)
+                }
+              >
+                Sumar lo nuevo
+              </Button>
+            </div>
+          )}
           {error && <p className="text-danger mt-3 text-[15px]">{error}</p>}
           <button
             disabled={busy}
-            onClick={() => run(() => unshareFolder(target.id), false)}
+            onClick={() =>
+              run(async () => {
+                await unshareTarget(target, shareId);
+                setShareId(target.id);
+              }, false)
+            }
             className="w-full mt-4 h-10 text-sm font-semibold text-danger hover:underline disabled:opacity-50"
           >
             {busy ? 'Un momento…' : 'Dejar de compartir'}
