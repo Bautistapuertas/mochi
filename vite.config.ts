@@ -69,7 +69,9 @@ export default defineConfig(({ mode }) => {
             'assets/index-*.{js,css}',
             'assets/rolldown-runtime-*.js',
             'assets/{PdfView,SheetView,DocxView,ImageView}-*.js',
-            'assets/pdf.worker*.mjs',
+            // Las librerías que usan los visores (PDF, Word y Excel), para que también abran sin internet.
+            'assets/{pdf,mammoth.browser,xlsx}-*.js',
+            'assets/pdf.worker*.{mjs,js}',
             '*.{svg,png,ico}',
           ],
           maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
