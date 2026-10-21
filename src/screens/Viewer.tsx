@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import ErrorBoundary from '../components/ErrorBoundary';
 import MoveModal from '../components/MoveModal';
 import { Back, ChevronLeft, ChevronRight, Download, External, Move, Offline, Pencil, Share, Trash } from '../components/icons';
 import { canSendToApp, sendFiles } from '../lib/send';
@@ -199,12 +200,14 @@ export default function Viewer({ id }: { id: string }) {
   else if (!blob) body = <Center><Spinner /><p className="text-muted mt-3">Abriendo…</p></Center>;
   else
     body = (
+      <ErrorBoundary resetKey={id} onClose={closeFile}>
       <Suspense fallback={<Center><Spinner /></Center>}>
         {kind === 'pdf' && <PdfView blob={blob} />}
         {kind === 'word' && <DocxView blob={blob} />}
         {kind === 'excel' && <SheetView blob={blob} />}
         {kind === 'image' && <ImageView blob={blob} name={file.name} thumbnail={file.thumbnailLink} onOpenDrive={openInDrive} />}
       </Suspense>
+      </ErrorBoundary>
     );
 
   return (
