@@ -10,3 +10,4 @@ dev-dist
 # Archivos de compilación y del editor
 *.tsbuildinfo
 .claude/
+linkedin/

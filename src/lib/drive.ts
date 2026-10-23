@@ -123,6 +123,11 @@ export async function list(q: string, opts: { orderBy?: string; pageSize?: numbe
 }
 
 export async function getFile(id: string) {
+  if (DEMO) {
+    const { demoFiles } = await import('./demo');
+    const f = demoFiles.find((x) => x.id === id);
+    if (f) return remember(f);
+  }
   return remember((await (await req(`${API}/files/${id}?fields=${FIELDS}`)).json()) as DFile);
 }
 
