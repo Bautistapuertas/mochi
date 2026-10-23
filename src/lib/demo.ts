@@ -45,10 +45,13 @@ export const demoFiles: DFile[] = [
 ];
 
 export function demoList(q: string): DFile[] {
-  if (q.includes(`mimeType='${F}'`)) return demoFolders;
+  const alive = (l: DFile[]) => l.filter((f) => !demoTrashed(f));
   const ids = [...q.matchAll(/'([^']+)' in parents/g)].map((m) => m[1]);
-  const files = ids.length ? demoFiles.filter((f) => f.parents!.some((p) => ids.includes(p))) : demoFiles;
-  return files;
+  const inIds = (l: DFile[]) => (ids.length ? l.filter((f) => f.parents!.some((p) => ids.includes(p))) : l);
+  if (q.includes(`mimeType='${F}'`)) return alive(demoFolders);
+  // Sin filtro de tipo (por ejemplo, "qué hay adentro de esta carpeta"): carpetas y archivos.
+  if (!q.includes('mimeType')) return alive(inIds([...demoFolders, ...demoFiles]));
+  return alive(inIds(demoFiles));
 }
 
 // Un PDF chiquito de 3 páginas armado a mano, para probar el lector sin cuenta.
@@ -91,3 +94,40 @@ export async function demoBlob(id: string): Promise<Blob> {
   out += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
   return new Blob([out], { type: 'application/pdf' });
 }
+
+// Cambios en modo demo (mover, renombrar, borrar, copiar, crear carpetas), solo en memoria.
+type Body = { name?: string; trashed?: boolean; appProperties?: Record<string, string | null> };
+const trashed = new Set<string>();
+const all = () => [...demoFolders, ...demoFiles];
+
+export function demoUpdate(id: string, body: Body, params: Record<string, string> = {}): DFile {
+  const f = all().find((x) => x.id === id);
+  if (!f) throw new Error('No existe');
+  if (body.name) f.name = body.name;
+  if (body.trashed) trashed.add(id);
+  if (body.appProperties)
+    for (const [k, v] of Object.entries(body.appProperties)) {
+      f.appProperties ??= {};
+      if (v === null) delete f.appProperties[k];
+      else f.appProperties[k] = v;
+    }
+  if (params.addParents) f.parents = [...(f.parents ?? []).filter((p) => !params.removeParents?.split(',').includes(p)), params.addParents];
+  f.modifiedTime = new Date().toISOString();
+  return f;
+}
+
+export function demoCreateFolder(name: string, parent: string | undefined, appProperties: Record<string, string>): DFile {
+  const f = folder(`d${Math.random().toString(36).slice(2, 8)}`, name, parent ?? 'root', appProperties);
+  demoFolders.push(f);
+  return f;
+}
+
+export function demoCopy(id: string, name: string, parent: string) {
+  const src = demoFiles.find((x) => x.id === id)!;
+  const f = { ...src, id: `c${Math.random().toString(36).slice(2, 8)}`, name, parents: [parent], modifiedTime: new Date().toISOString() };
+  demoFiles.push(f);
+  // El PDF de prueba se arma con el nombre del original.
+  return f;
+}
+
+export const demoTrashed = (f: DFile) => trashed.has(f.id) || (f.parents ?? []).some((p) => trashed.has(p));

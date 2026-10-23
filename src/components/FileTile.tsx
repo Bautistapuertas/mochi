@@ -3,13 +3,16 @@ import type { FileItem } from '../lib/facu';
 import { KIND_STYLE, fmtDate, kindOf } from '../lib/files';
 import { openFile } from '../lib/router';
 import { Check, Offline } from './icons';
+import RenameInput from './RenameInput';
+import type { Item } from '../lib/explorer';
 
 // Para arrastrar archivos a una carpeta dentro de la app.
 export const DRAG_TYPE = 'application/x-mochi-files';
-export type DragFile = { id: string; parents: string[] };
+export type DragFile = Item;
 
 // Cuadradito de archivo: vista previa arriba (si Drive la tiene) y título abajo.
 // Con onToggle se puede seleccionar: círculo al pasar el mouse, o mantener apretado en el celu.
+// Con el mouse funciona como en Windows: clic selecciona, doble clic abre, clic derecho muestra el menú.
 export default function FileTile({
   file,
   code,
@@ -20,6 +23,11 @@ export default function FileTile({
   offline = false,
   onToggle,
   dragFiles,
+  onMouseSelect,
+  onMenu,
+  renaming = false,
+  onRenamed,
+  cut = false,
 }: {
   file: FileItem;
   code?: string;
@@ -32,25 +40,35 @@ export default function FileTile({
   onToggle?: () => void;
   // Qué se arrastra: este archivo, o todos los seleccionados.
   dragFiles?: () => DragFile[];
+  onMouseSelect?: (e: React.MouseEvent) => void;
+  onMenu?: (e: React.MouseEvent) => void;
+  renaming?: boolean;
+  onRenamed?: (name: string | null) => void;
+  // Cortado (Ctrl+X): se ve más clarito hasta que se pega.
+  cut?: boolean;
 }) {
   const s = KIND_STYLE[kindOf(file)];
   const [thumbOk, setThumbOk] = useState(!!file.thumbnailLink);
   const press = useRef<number>(undefined);
   const longPressed = useRef(false);
+  const pointer = useRef('mouse');
 
   return (
-    <div className="relative group">
+    <div className={`relative group ${cut ? 'opacity-50' : ''}`} data-item={file.id}>
       <button
-        onClick={() => {
+        onPointerDown={(e) => (pointer.current = e.pointerType)}
+        onClick={(e) => {
           if (longPressed.current) return void (longPressed.current = false);
+          if (pointer.current === 'mouse' && onMouseSelect) return onMouseSelect(e);
           if (selecting && onToggle) onToggle();
           else openFile(file.id);
         }}
-        draggable
+        onDoubleClick={() => pointer.current === 'mouse' && onMouseSelect && openFile(file.id)}
+        draggable={!renaming}
         onDragStart={(e) => {
-          const list = dragFiles?.() ?? [{ id: file.id, parents: file.parents ?? [] }];
+          const list = dragFiles?.() ?? [{ id: file.id, kind: 'file' as const, name: file.name, parentId: file.parents?.[0] ?? '' }];
           e.dataTransfer.setData(DRAG_TYPE, JSON.stringify(list));
-          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.effectAllowed = 'copyMove';
         }}
         onTouchStart={() => {
           if (!onToggle) return;
@@ -62,7 +80,10 @@ export default function FileTile({
         }}
         onTouchEnd={() => clearTimeout(press.current)}
         onTouchMove={() => clearTimeout(press.current)}
-        onContextMenu={(e) => onToggle && e.preventDefault()}
+        onContextMenu={(e) => {
+          if (pointer.current === 'mouse' && onMenu) return onMenu(e);
+          if (onToggle) e.preventDefault();
+        }}
         className={`w-full h-full text-left bg-surface border rounded-2xl overflow-hidden flex flex-col transition select-none [-webkit-touch-callout:none] ${
           selected
             ? 'border-accent ring-2 ring-accent'
@@ -110,7 +131,11 @@ export default function FileTile({
           {selected && <span className="absolute inset-0 bg-accent/15" />}
         </div>
         <div className="px-3 pt-2.5 pb-3">
-          <div className="font-semibold text-[14px] leading-snug line-clamp-2">{title}</div>
+          {renaming && onRenamed ? (
+            <RenameInput initial={file.name} isFile onDone={onRenamed} />
+          ) : (
+            <div className="font-semibold text-[14px] leading-snug line-clamp-2">{title}</div>
+          )}
           <div className="text-xs text-muted mt-1 truncate">{subtitle ?? fmtDate(file.modifiedTime)}</div>
         </div>
       </button>

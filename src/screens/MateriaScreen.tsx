@@ -37,10 +37,26 @@ import {
   type Materia,
 } from '../lib/facu';
 import { keepOffline } from '../lib/fileBlob';
+import { ClipboardPaste, Copy, FolderPlus, RefreshCw, Scissors } from 'lucide-react';
+import ContextMenu, { type CtxItem } from '../components/ContextMenu';
+import RenameInput from '../components/RenameInput';
+import {
+  CLIPBOARD,
+  copyItems,
+  getClipboard,
+  moveItems,
+  newFolderName,
+  paste,
+  removeItems,
+  renameItem,
+  setClipboard,
+  type Item,
+} from '../lib/explorer';
+import { FOLDER } from '../lib/drive';
 import { canSendToApp, sendFiles } from '../lib/send';
 import { baseName, cleanNames, naturalCompare } from '../lib/files';
 import { offlineIds } from '../lib/offline';
-import { go, setLastMateria, setViewerList } from '../lib/router';
+import { go, openFile, setLastMateria, setViewerList } from '../lib/router';
 import { itemsFromDrop, itemsFromInput, mergeSameName, type UploadItem } from '../lib/upload';
 
 type Sort = 'nombre' | 'recientes';
@@ -86,8 +102,24 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [contentHits, setContentHits] = useState<FileItem[] | null>(null);
-  const [bulk, setBulk] = useState<'move' | 'delete' | null>(null);
+  const [bulk, setBulk] = useState<'move' | null>(null);
   const [offline, setOffline] = useState<Set<string>>(new Set());
+  // Como en el Explorador de Windows: último elegido (para Shift+clic y flechas), menú del clic derecho,
+  // nombre que se está cambiando, lo que se va a eliminar y el portapapeles.
+  const anchor = useRef<string | null>(null);
+  const [ctx, setCtx] = useState<{ x: number; y: number; items: CtxItem[] } | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [toDelete, setToDelete] = useState<Item[] | null>(null);
+  const [renameTarget, setRenameTarget] = useState<Item | null>(null);
+  const [shareFor, setShareFor] = useState<Folder | Materia | null>(null);
+  const [clip, setClip] = useState(getClipboard);
+  const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const f = () => setClip(getClipboard());
+    addEventListener(CLIPBOARD, f);
+    return () => removeEventListener(CLIPBOARD, f);
+  }, []);
   const fileInput = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
@@ -174,6 +206,14 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
     setViewerList(shown.map((f) => f.id));
   }, [results, here]);
 
+  // Atajos de teclado como en Windows. Se registra una vez y usa siempre la última versión.
+  const keyHandler = useRef<(e: KeyboardEvent) => void>(() => {});
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => keyHandler.current(e);
+    addEventListener('keydown', k);
+    return () => removeEventListener('keydown', k);
+  }, []);
+
   if (!m)
     return (
       <div className="min-h-dvh grid place-items-center p-6 text-center">
@@ -199,19 +239,41 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
     if (items.length) setPicked(items);
   };
 
-  const moveTo = async (list: DragFile[], targetId: string, targetName: string) => {
-    const todo = list.filter((d) => !d.parents.includes(targetId));
-    if (!todo.length) return;
+  // Lo que se ve en pantalla, en orden: primero las carpetas y después los archivos.
+  const shownFolders = results ? [] : current ? current.children : m.folders;
+  const shownFiles = results ? [...results.byName, ...results.byContent] : here.list;
+  const items: Item[] = [
+    ...shownFolders.map((f) => ({ id: f.id, kind: 'folder' as const, name: f.name, parentId: f.parentId })),
+    ...shownFiles.map((f) => ({ id: f.id, kind: 'file' as const, name: f.name, parentId: f.folder?.id ?? m.id })),
+  ];
+  const selectedItems = items.filter((i) => selected.has(i.id));
+  const selectedFiles = (files ?? []).filter((f) => selected.has(f.id));
+  const cutIds = new Set(clip?.mode === 'cut' ? clip.items.map((i) => i.id) : []);
+
+  // Después de un cambio se vuelve a leer todo (las carpetas también pueden haber cambiado).
+  const refresh = async () => {
+    await reload();
+    notifyChanged();
+  };
+
+  const run = async (fn: () => Promise<string | void>) => {
     try {
-      for (const d of todo) await move(d.id, d.parents, targetId);
-      toast(todo.length === 1 ? `Movido a ${targetName}` : `${todo.length} archivos movidos a ${targetName}`);
-      clearSelection();
+      const msg = await fn();
+      if (msg) toast(msg);
     } catch (e) {
       toast(errorText(e));
-    } finally {
-      notifyChanged();
     }
   };
+
+  const plural = (n: number) => (n === 1 ? '1 elemento' : `${n} elementos`);
+
+  const moveTo = (list: DragFile[], targetId: string, targetName: string, copy = false) =>
+    run(async () => {
+      const n = copy ? await copyItems(tree, list, targetId) : await moveItems(tree, list, targetId);
+      clearSelection();
+      await refresh();
+      if (n) return `${plural(n)} ${copy ? 'copiados' : 'movidos'} a ${targetName}`;
+    });
 
   const toggle = (fid: string) =>
     setSelected((s) => {
@@ -220,25 +282,269 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
       else n.add(fid);
       return n;
     });
-  const selectedFiles = (files ?? []).filter((f) => selected.has(f.id));
-  // Si arrastrás uno de los seleccionados, se mueven todos.
-  const dragFor = (f: FileItem) => () =>
-    (selected.has(f.id) ? selectedFiles : [f]).map((x) => ({ id: x.id, parents: x.parents ?? [] }));
 
-  const tile = (f: FileItem, code: string | undefined, title: string, subtitle?: string) => (
-    <FileTile
-      key={f.id}
-      file={f}
-      code={code}
-      title={title}
-      subtitle={subtitle}
-      selected={selected.has(f.id)}
-      selecting={selecting}
-      offline={offline.has(f.id)}
-      onToggle={() => toggle(f.id)}
-      dragFiles={dragFor(f)}
-    />
-  );
+  // Clic con el mouse: solo ese; Ctrl+clic suma o saca; Shift+clic elige desde el último hasta este.
+  const mouseSelect = (id: string) => (e: React.MouseEvent) => {
+    if (e.shiftKey && anchor.current) {
+      const a = items.findIndex((i) => i.id === anchor.current);
+      const b = items.findIndex((i) => i.id === id);
+      const range = items.slice(Math.min(a, b), Math.max(a, b) + 1).map((i) => i.id);
+      setSelected((s) => new Set([...(e.ctrlKey || e.metaKey ? s : []), ...range]));
+      return;
+    }
+    anchor.current = id;
+    if (e.ctrlKey || e.metaKey) toggle(id);
+    else setSelected(new Set([id]));
+  };
+
+  const openItem = (it: Item) => {
+    if (it.kind === 'file') return openFile(it.id);
+    const f = tree.folders.get(it.id);
+    if (f) openFolder(f);
+  };
+
+  // Si arrastrás uno de los seleccionados, se llevan todos.
+  const dragFor = (it: Item) => () => (selected.has(it.id) ? selectedItems : [it]);
+
+  const copyOrCut = (mode: 'copy' | 'cut', list = selectedItems) => {
+    if (!list.length) return;
+    setClipboard({ mode, items: list });
+    toast(`${plural(list.length)} ${mode === 'copy' ? 'copiados' : 'cortados'}. Pegalos con Ctrl+V donde quieras.`);
+  };
+
+  const doPaste = (dest = destId, name = destName) =>
+    run(async () => {
+      const c = getClipboard();
+      if (!c) return;
+      const n = await paste(tree, dest, (i, t) => t > 1 && toast(`Pegando ${i + 1} de ${t}…`));
+      await refresh();
+      return `${plural(n)} ${c.mode === 'cut' ? 'movidos' : 'pegados'} en ${name}`;
+    });
+
+  // Como en Windows: aparece "Nueva carpeta" y se le escribe el nombre ahí mismo.
+  const newFolderInline = () =>
+    run(async () => {
+      const f = await addFolder(await newFolderName(destId), destId);
+      await reload();
+      setSelected(new Set([f.id]));
+      anchor.current = f.id;
+      setRenaming(f.id);
+    });
+
+  const finishRename = (it: Item, name: string | null) => {
+    setRenaming(null);
+    if (!name) return;
+    run(async () => {
+      await renameItem(it.id, name);
+      await refresh();
+    });
+  };
+
+  const startRename = (it: Item) => (shownFolders.some((f) => f.id === it.id) || it.kind === 'file' ? setRenaming(it.id) : setRenameTarget(it));
+
+  const download = (list = selectedFiles) =>
+    run(async () => {
+      if (!list.length) return;
+      const r = await sendFiles(list, (i, n) => n > 1 && toast(`Preparando ${i + 1} de ${n}…`));
+      if (r === 'downloaded') return list.length === 1 ? 'Descargado' : `Se descargaron ${list.length} archivos`;
+    });
+
+  // Menú del clic derecho sobre un archivo o carpeta. Si no estaba elegido, queda elegido solo ese.
+  const itemMenu = (it: Item) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    let sel = selected;
+    if (!sel.has(it.id)) {
+      sel = new Set([it.id]);
+      setSelected(sel);
+      anchor.current = it.id;
+    }
+    const list = items.filter((i) => sel.has(i.id));
+    const one = list.length === 1 ? list[0] : null;
+    const filesHere = (files ?? []).filter((f) => sel.has(f.id));
+    const folder = one?.kind === 'folder' ? tree.folders.get(one.id) : undefined;
+    setCtx({
+      x: e.clientX,
+      y: e.clientY,
+      items: [
+        ...(one ? [{ label: 'Abrir', icon: <External width={16} height={16} />, shortcut: 'Enter', onClick: () => openItem(one) }, 'sep' as const] : []),
+        { label: 'Cortar', icon: <Scissors size={16} />, shortcut: 'Ctrl+X', onClick: () => copyOrCut('cut', list) },
+        { label: 'Copiar', icon: <Copy size={16} />, shortcut: 'Ctrl+C', onClick: () => copyOrCut('copy', list) },
+        ...(folder && clip ? [{ label: `Pegar en ${folder.name}`, icon: <ClipboardPaste size={16} />, onClick: () => doPaste(folder.id, folder.name) }] : []),
+        'sep',
+        ...(one ? [{ label: 'Cambiar nombre', icon: <Pencil width={16} height={16} />, shortcut: 'F2', onClick: () => startRename(one) }] : []),
+        { label: 'Mover a…', icon: <Move width={16} height={16} />, onClick: () => setBulk('move') },
+        ...(filesHere.length
+          ? [
+              { label: filesHere.length === 1 ? 'Descargar' : `Descargar ${filesHere.length} archivos`, icon: <Download width={16} height={16} />, onClick: () => download(filesHere) },
+              { label: 'Guardar sin conexión', icon: <Offline width={16} height={16} />, onClick: saveSelectedOffline },
+            ]
+          : []),
+        ...(folder ? [{ label: 'Compartir', icon: <Share width={16} height={16} />, onClick: () => setShareFor(folder) }] : []),
+        'sep',
+        { label: 'Eliminar', icon: <Trash width={16} height={16} />, shortcut: 'Supr', danger: true, onClick: () => setToDelete(list) },
+      ],
+    });
+  };
+
+  // Clic derecho en una carpeta del árbol de la izquierda.
+  const treeMenu = (f: Folder) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    const it: Item = { id: f.id, kind: 'folder', name: f.name, parentId: f.parentId };
+    setCtx({
+      x: e.clientX,
+      y: e.clientY,
+      items: [
+        { label: 'Abrir', icon: <External width={16} height={16} />, onClick: () => openFolder(f) },
+        'sep',
+        { label: 'Cortar', icon: <Scissors size={16} />, onClick: () => copyOrCut('cut', [it]) },
+        { label: 'Copiar', icon: <Copy size={16} />, onClick: () => copyOrCut('copy', [it]) },
+        ...(clip ? [{ label: `Pegar en ${f.name}`, icon: <ClipboardPaste size={16} />, onClick: () => doPaste(f.id, f.name) }] : []),
+        'sep',
+        { label: 'Cambiar nombre', icon: <Pencil width={16} height={16} />, onClick: () => setRenameTarget(it) },
+        { label: 'Compartir', icon: <Share width={16} height={16} />, onClick: () => setShareFor(f) },
+        'sep',
+        { label: 'Eliminar', icon: <Trash width={16} height={16} />, danger: true, onClick: () => setToDelete([it]) },
+      ],
+    });
+  };
+
+  // Clic derecho en un lugar vacío: crear, pegar, subir, elegir todo y ordenar.
+  const backgroundMenu = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('[data-item],input,textarea')) return;
+    e.preventDefault();
+    clearSelection();
+    setCtx({
+      x: e.clientX,
+      y: e.clientY,
+      items: [
+        { label: 'Nueva carpeta', icon: <FolderPlus size={16} />, shortcut: 'Ctrl+Shift+N', onClick: newFolderInline },
+        { label: clip ? `Pegar ${plural(clip.items.length)}` : 'Pegar', icon: <ClipboardPaste size={16} />, shortcut: 'Ctrl+V', disabled: !clip, onClick: () => doPaste() },
+        'sep',
+        { label: 'Subir archivos', icon: <UploadIcon width={16} height={16} />, onClick: () => fileInput.current?.click() },
+        { label: 'Subir carpeta', icon: <FolderIcon width={16} height={16} />, onClick: () => folderInput.current?.click() },
+        'sep',
+        { label: 'Seleccionar todo', shortcut: 'Ctrl+A', onClick: () => setSelected(new Set(items.map((i) => i.id))) },
+        {
+          label: sort === 'nombre' ? 'Ordenar por más recientes' : 'Ordenar por nombre',
+          icon: <SortIcon />,
+          onClick: () => changeSort(sort === 'nombre' ? 'recientes' : 'nombre'),
+        },
+        { label: 'Actualizar', icon: <RefreshCw size={16} />, shortcut: 'F5', onClick: () => run(refresh) },
+      ],
+    });
+  };
+
+  // Elegir arrastrando un rectángulo sobre el fondo, como en el escritorio.
+  const startMarquee = (e: React.MouseEvent) => {
+    if (e.button !== 0 || (e.target as HTMLElement).closest('[data-item],button,input,textarea,a,select')) return;
+    const add = e.ctrlKey || e.metaKey;
+    const base = add ? new Set(selected) : new Set<string>();
+    const sx = e.clientX;
+    const sy = e.clientY;
+    let moved = false;
+    const onMove = (ev: MouseEvent) => {
+      const x = Math.min(sx, ev.clientX);
+      const y = Math.min(sy, ev.clientY);
+      const w = Math.abs(ev.clientX - sx);
+      const h = Math.abs(ev.clientY - sy);
+      if (!moved && w + h < 6) return;
+      moved = true;
+      ev.preventDefault();
+      setMarquee({ x, y, w, h });
+      const hit = new Set(base);
+      for (const el of contentRef.current?.querySelectorAll<HTMLElement>('[data-item]') ?? []) {
+        const r = el.getBoundingClientRect();
+        if (r.right > x && r.left < x + w && r.bottom > y && r.top < y + h) hit.add(el.dataset.item!);
+      }
+      setSelected(hit);
+    };
+    const onUp = () => {
+      removeEventListener('mousemove', onMove);
+      removeEventListener('mouseup', onUp);
+      setMarquee(null);
+      if (!moved && !add) clearSelection();
+    };
+    addEventListener('mousemove', onMove);
+    addEventListener('mouseup', onUp);
+  };
+
+  // Flechas: izquierda/derecha van al anterior o siguiente; arriba/abajo, al de la fila de arriba o abajo.
+  const arrow = (key: string) => {
+    const els = [...(contentRef.current?.querySelectorAll<HTMLElement>('[data-item]') ?? [])];
+    if (!els.length) return;
+    const i = els.findIndex((el) => el.dataset.item === anchor.current);
+    let next = els[0];
+    if (i >= 0) {
+      const cur = els[i].getBoundingClientRect();
+      if (key === 'ArrowRight') next = els[Math.min(els.length - 1, i + 1)];
+      else if (key === 'ArrowLeft') next = els[Math.max(0, i - 1)];
+      else {
+        const down = key === 'ArrowDown';
+        const cands = els.filter((el) => {
+          const r = el.getBoundingClientRect();
+          return down ? r.top >= cur.bottom - 2 : r.bottom <= cur.top + 2;
+        });
+        const dist = (el: HTMLElement) => {
+          const r = el.getBoundingClientRect();
+          return Math.abs(down ? r.top - cur.bottom : cur.top - r.bottom) * 10 + Math.abs(r.left - cur.left);
+        };
+        next = cands.sort((a, b) => dist(a) - dist(b))[0] ?? els[i];
+      }
+    }
+    anchor.current = next.dataset.item!;
+    setSelected(new Set([next.dataset.item!]));
+    next.scrollIntoView({ block: 'nearest' });
+  };
+
+  keyHandler.current = (e: KeyboardEvent) => {
+    const t = e.target as HTMLElement;
+    if (e.defaultPrevented || /INPUT|TEXTAREA|SELECT/.test(t.tagName) || t.isContentEditable) return;
+    // No con una ventana, un archivo o un menú abiertos.
+    if (ctx || renaming || [...document.querySelectorAll('[role="dialog"]')].some((d) => d.getClientRects().length)) return;
+    if (new URLSearchParams(location.hash.split('?')[1]).has('f')) return;
+    const mod = e.ctrlKey || e.metaKey;
+    const k = e.key.toLowerCase();
+    if (mod && e.shiftKey && k === 'n') newFolderInline();
+    else if (mod && k === 'a') setSelected(new Set(items.map((i) => i.id)));
+    else if (mod && k === 'c') copyOrCut('copy');
+    else if (mod && k === 'x') copyOrCut('cut');
+    else if (mod && k === 'v') doPaste();
+    else if (e.key === 'Delete' && selectedItems.length) setToDelete(selectedItems);
+    else if (e.key === 'F2' && selectedItems.length === 1) startRename(selectedItems[0]);
+    else if (e.key === 'Enter' && selectedItems.length) openItem(selectedItems[0]);
+    else if ((e.key === 'Backspace' || (e.altKey && e.key === 'ArrowLeft')) && current) openFolder(current.parent);
+    else if (e.key === 'Escape' && selected.size) clearSelection();
+    else if (e.key === 'F5') run(refresh);
+    else if (!mod && !e.altKey && ['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown'].includes(e.key)) arrow(e.key);
+    else return;
+    e.preventDefault();
+  };
+
+  const tile = (f: FileItem, code: string | undefined, title: string, subtitle?: string) => {
+    const it: Item = { id: f.id, kind: 'file', name: f.name, parentId: f.folder?.id ?? m.id };
+    return (
+      <FileTile
+        key={f.id}
+        file={f}
+        code={code}
+        title={title}
+        subtitle={subtitle}
+        selected={selected.has(f.id)}
+        selecting={selecting}
+        offline={offline.has(f.id)}
+        onToggle={() => {
+          anchor.current = f.id;
+          toggle(f.id);
+        }}
+        dragFiles={dragFor(it)}
+        onMouseSelect={mouseSelect(f.id)}
+        onMenu={itemMenu(it)}
+        renaming={renaming === f.id}
+        onRenamed={(name) => finishRename(it, name)}
+        cut={cutIds.has(f.id)}
+      />
+    );
+  };
 
   async function saveSelectedOffline() {
     const list = selectedFiles;
@@ -340,18 +646,34 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
       />
     ) : (
       <>
-        {current && current.children.length > 0 && (
+        {shownFolders.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 mb-6">
-            {current.children.map((f) => (
-              <FolderCard
-                key={f.id}
-                name={f.name}
-                color={m.color}
-                count={counts.get(f.id) ?? 0}
-                onClick={() => openFolder(f)}
-                onFileDrop={(d) => moveTo(d, f.id, f.name)}
-              />
-            ))}
+            {shownFolders.map((f) => {
+              const it: Item = { id: f.id, kind: 'folder', name: f.name, parentId: f.parentId };
+              return (
+                <FolderCard
+                  key={f.id}
+                  id={f.id}
+                  name={f.name}
+                  color={m.color}
+                  count={counts.get(f.id) ?? 0}
+                  selected={selected.has(f.id)}
+                  selecting={selecting}
+                  cut={cutIds.has(f.id)}
+                  renaming={renaming === f.id}
+                  onRenamed={(name) => finishRename(it, name)}
+                  onOpen={() => openFolder(f)}
+                  onToggle={() => {
+                    anchor.current = f.id;
+                    toggle(f.id);
+                  }}
+                  onMouseSelect={mouseSelect(f.id)}
+                  onMenu={itemMenu(it)}
+                  dragItems={dragFor(it)}
+                  onFileDrop={(d, copy) => moveTo(d, f.id, f.name, copy)}
+                />
+              );
+            })}
           </div>
         )}
 
@@ -385,14 +707,10 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
               })}
             </div>
           </section>
-        ) : current ? (
-          current.children.length === 0 && (
-            <EmptyDrop onClick={() => fileInput.current?.click()} title="Esta carpeta está vacía" />
-          )
-        ) : m.folders.length === 0 ? (
-          <EmptyDrop onClick={() => fileInput.current?.click()} title="Todavía no hay nada acá" />
         ) : (
-          <p className="text-muted text-center py-10">Elegí una carpeta para ver sus archivos.</p>
+          shownFolders.length === 0 && (
+            <EmptyDrop onClick={() => fileInput.current?.click()} title={current ? 'Esta carpeta está vacía' : 'Todavía no hay nada acá'} />
+          )
         )}
       </>
     );
@@ -420,7 +738,7 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
           <button onClick={() => go('/')} className="flex items-center gap-1 text-sm font-semibold text-muted hover:text-ink -ml-1">
             <Back width={18} height={18} /> Inicio
           </button>
-          <DropTarget onFile={(d) => moveTo(d, m.id, m.name)}>
+          <DropTarget onFile={(d, copy) => moveTo(d, m.id, m.name, copy)}>
             {(over) => (
               <button
                 onClick={() => openFolder()}
@@ -442,13 +760,14 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
               on={!current}
               color={m.color}
               onClick={() => openFolder()}
-              onFileDrop={(d) => moveTo(d, m.id, m.name)}
+              onFileDrop={(d, copy) => moveTo(d, m.id, m.name, copy)}
             />
             {m.folders.map((f) => (
-              <FolderTree key={f.id} folder={f} depth={0} current={current} path={path} counts={counts} color={m.color} open={openFolder} drop={moveTo} />
+              <FolderTree key={f.id} folder={f} depth={0} current={current} path={path} counts={counts} color={m.color} open={openFolder} drop={moveTo} menu={treeMenu} />
             ))}
             <button
-              onClick={() => setModal('new-folder')}
+              onClick={newFolderInline}
+              title="Ctrl+Shift+N"
               className="flex items-center gap-2 h-9 px-3 rounded-xl text-sm font-semibold text-muted hover:text-ink hover:bg-sunken"
             >
               <Plus width={18} height={18} /> Nueva carpeta{current && ` en ${current.name}`}
@@ -528,7 +847,12 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
             <Menu items={menu} />
           </div>
 
-          <div className="px-4 sm:px-6 lg:px-8 pb-28 lg:pb-12">
+          <div
+            ref={contentRef}
+            onMouseDown={startMarquee}
+            onContextMenu={backgroundMenu}
+            className={`px-4 sm:px-6 lg:px-8 pb-28 lg:pb-12 min-h-[calc(100dvh-7rem)] ${marquee ? 'select-none' : ''}`}
+          >
             {/* Celu: resumen de fechas y notas, y camino de subcarpetas */}
             <div className="lg:hidden">
               {!current && !results && (
@@ -548,7 +872,8 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
             </div>
             {content}
             <p className="hidden lg:block text-sm text-muted mt-10 text-center">
-              Tip: arrastrá archivos o carpetas desde tu compu a esta ventana para subirlos a {destName}.
+              Funciona como el Explorador de Windows: clic para elegir, doble clic para abrir, clic derecho para más opciones,
+              Ctrl+C / Ctrl+X / Ctrl+V, F2 para renombrar y Supr para eliminar. Arrastrá archivos desde tu compu para subirlos.
             </p>
           </div>
         </main>
@@ -580,23 +905,29 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
 
       {selecting && (
         <div className="fixed inset-x-0 bottom-20 lg:bottom-0 z-40 flex justify-center px-3 pb-4 lg:pl-20 safe-bottom pointer-events-none">
-          <div className="pointer-events-auto flex items-center gap-1 bg-ink text-bg rounded-2xl shadow-xl p-1.5 pl-4 max-w-full sheet-up">
+          <div className="pointer-events-auto flex items-center gap-1 bg-ink text-bg rounded-2xl shadow-xl p-1.5 pl-4 max-w-full overflow-x-auto no-scrollbar sheet-up">
             <span className="font-semibold text-[15px] whitespace-nowrap mr-2">
               {selected.size}
               <span className="hidden sm:inline"> {selected.size === 1 ? 'seleccionado' : 'seleccionados'}</span>
             </span>
-            <BarButton onClick={() => setSelected(new Set(here.list.map((f) => f.id)))}>Todos</BarButton>
-            <BarButton disabled={!selected.size} onClick={sendSelected} label={canSendToApp() ? 'Enviar a otra app' : 'Descargar'}>
+            <BarButton onClick={() => setSelected(new Set(items.map((i) => i.id)))}>Todos</BarButton>
+            <BarButton disabled={!selected.size} onClick={() => copyOrCut('copy')} label="Copiar">
+              <Copy size={18} /> <span className="hidden sm:inline">Copiar</span>
+            </BarButton>
+            <BarButton disabled={!selected.size} onClick={() => copyOrCut('cut')} label="Cortar">
+              <Scissors size={18} /> <span className="hidden sm:inline">Cortar</span>
+            </BarButton>
+            <BarButton disabled={!selectedFiles.length} onClick={sendSelected} label={canSendToApp() ? 'Enviar a otra app' : 'Descargar'}>
               {canSendToApp() ? <Share width={18} height={18} /> : <Download width={18} height={18} />}
               <span className="hidden sm:inline">{canSendToApp() ? 'Enviar' : 'Descargar'}</span>
             </BarButton>
-            <BarButton disabled={!selected.size} onClick={() => setBulk('move')}>
-              <Move width={18} height={18} /> Mover
+            <BarButton disabled={!selected.size} onClick={() => setBulk('move')} label="Mover">
+              <Move width={18} height={18} /> <span className="hidden sm:inline">Mover</span>
             </BarButton>
-            <BarButton disabled={!selected.size} onClick={saveSelectedOffline} label="Guardar sin conexión">
-              <Offline width={18} height={18} /> <span className="hidden sm:inline">Sin conexión</span>
+            <BarButton disabled={!selectedFiles.length} onClick={saveSelectedOffline} label="Guardar sin conexión">
+              <Offline width={18} height={18} /> <span className="hidden xl:inline">Sin conexión</span>
             </BarButton>
-            <BarButton disabled={!selected.size} onClick={() => setBulk('delete')}>
+            <BarButton disabled={!selected.size} onClick={() => setToDelete(selectedItems)} label="Eliminar">
               <Trash width={18} height={18} /> <span className="hidden sm:inline">Eliminar</span>
             </BarButton>
             <BarButton onClick={clearSelection} label="Cancelar selección">
@@ -605,34 +936,68 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
           </div>
         </div>
       )}
+
+      {/* Lo copiado o cortado espera acá hasta que lo pegues, aunque cambies de carpeta o de materia. */}
+      {clip && !selecting && (
+        <div className="fixed inset-x-0 bottom-20 lg:bottom-0 z-40 flex justify-center px-3 pb-4 lg:pl-20 safe-bottom pointer-events-none">
+          <div className="pointer-events-auto flex items-center gap-1 bg-ink text-bg rounded-2xl shadow-xl p-1.5 pl-4 max-w-full sheet-up">
+            <span className="text-[15px] whitespace-nowrap mr-2 truncate">
+              {plural(clip.items.length)} {clip.mode === 'cut' ? 'cortados' : 'copiados'}
+            </span>
+            <BarButton onClick={() => doPaste()}>
+              <ClipboardPaste size={18} /> Pegar acá
+            </BarButton>
+            <BarButton onClick={() => setClipboard(null)} label="Vaciar portapapeles">
+              <Close width={18} height={18} />
+            </BarButton>
+          </div>
+        </div>
+      )}
       {bulk === 'move' && (
         <MoveModal
-          files={selectedFiles}
+          files={selectedItems.map((i) => ({ id: i.id, name: i.name, mimeType: i.kind === 'folder' ? FOLDER : '', modifiedTime: '', parents: [i.parentId] }))}
+          exclude={selectedItems.filter((i) => i.kind === 'folder').map((i) => i.id)}
           initialMateria={m.id}
           initialFolder={current?.id}
           onClose={() => setBulk(null)}
           onMoved={(moved, where) => {
-            toast(`${moved.length} ${moved.length === 1 ? 'archivo movido' : 'archivos movidos'} a ${where}`);
+            toast(`${plural(moved.length)} movidos a ${where}`);
             clearSelection();
-            notifyChanged();
+            refresh();
           }}
         />
       )}
-      {bulk === 'delete' && (
+      {toDelete && (
         <ConfirmModal
-          title={`¿Eliminar ${selected.size} ${selected.size === 1 ? 'archivo' : 'archivos'}?`}
-          text="Van a la papelera de Google Drive. Podés recuperarlos desde ahí durante 30 días."
+          title={toDelete.length === 1 ? `¿Eliminar ${toDelete[0].name}?` : `¿Eliminar ${toDelete.length} elementos?`}
+          text={`${toDelete.some((i) => i.kind === 'folder') ? 'Las carpetas se eliminan con todo lo que tienen adentro. ' : ''}Van a la papelera de Google Drive y se pueden recuperar desde ahí durante 30 días.`}
           action="Eliminar"
-          onClose={() => setBulk(null)}
+          onClose={() => setToDelete(null)}
           onConfirm={async () => {
-            try {
-              for (const f of selectedFiles) await trash(f.id);
-              toast(`${selectedFiles.length} en la papelera de Drive`);
-              clearSelection();
-            } finally {
-              notifyChanged();
-            }
+            await removeItems(toDelete);
+            toast(`${plural(toDelete.length)} en la papelera de Drive`);
+            clearSelection();
+            await refresh();
           }}
+        />
+      )}
+      {renameTarget && (
+        <PromptModal
+          title="Cambiar nombre"
+          initial={renameTarget.name}
+          onClose={() => setRenameTarget(null)}
+          onSubmit={async (name) => {
+            await renameItem(renameTarget.id, name);
+            await refresh();
+          }}
+        />
+      )}
+      {shareFor && <ShareModal target={shareFor} onClose={() => setShareFor(null)} />}
+      {ctx && <ContextMenu x={ctx.x} y={ctx.y} items={ctx.items} onClose={() => setCtx(null)} />}
+      {marquee && (
+        <div
+          className="fixed z-30 pointer-events-none rounded-sm border border-accent bg-accent/10"
+          style={{ left: marquee.x, top: marquee.y, width: marquee.w, height: marquee.h }}
         />
       )}
 
@@ -800,6 +1165,7 @@ function FolderTree({
   color,
   open,
   drop,
+  menu,
 }: {
   folder: Folder;
   depth: number;
@@ -808,7 +1174,8 @@ function FolderTree({
   counts: Map<string, number>;
   color: string;
   open: (f?: Folder) => void;
-  drop: (d: DragFile[], id: string, name: string) => void;
+  drop: (d: DragFile[], id: string, name: string, copy: boolean) => void;
+  menu: (f: Folder) => (e: React.MouseEvent) => void;
 }) {
   const inPath = path.some((p) => p.id === folder.id);
   const [expanded, setExpanded] = useState(inPath);
@@ -830,11 +1197,12 @@ function FolderTree({
           open(folder);
           setExpanded(true);
         }}
-        onFileDrop={(d) => drop(d, folder.id, folder.name)}
+        onFileDrop={(d, copy) => drop(d, folder.id, folder.name, copy)}
+        onMenu={menu(folder)}
       />
       {expanded &&
         folder.children.map((c) => (
-          <FolderTree key={c.id} folder={c} depth={depth + 1} current={current} path={path} counts={counts} color={color} open={open} drop={drop} />
+          <FolderTree key={c.id} folder={c} depth={depth + 1} current={current} path={path} counts={counts} color={color} open={open} drop={drop} menu={menu} />
         ))}
     </>
   );
@@ -851,6 +1219,7 @@ function TreeItem({
   onToggle,
   onClick,
   onFileDrop,
+  onMenu,
 }: {
   label: string;
   depth: number;
@@ -861,7 +1230,8 @@ function TreeItem({
   expanded?: boolean;
   onToggle?: () => void;
   onClick: () => void;
-  onFileDrop: (d: DragFile[]) => void;
+  onFileDrop: (d: DragFile[], copy: boolean) => void;
+  onMenu?: (e: React.MouseEvent) => void;
 }) {
   return (
     <DropTarget onFile={onFileDrop}>
@@ -871,6 +1241,7 @@ function TreeItem({
             over ? 'bg-accent-soft ring-2 ring-accent' : on ? 'bg-accent-soft text-ink font-bold' : 'hover:bg-sunken'
           }`}
           style={{ paddingLeft: 4 + depth * 16 }}
+          onContextMenu={onMenu}
         >
           <button
             onClick={onToggle}
@@ -933,46 +1304,103 @@ function SheetAction({ icon, label, hint, onClick }: { icon: ReactNode; label: s
   );
 }
 
+// Carpeta en la grilla. Con el mouse funciona como en Windows (clic elige, doble clic abre, clic derecho, arrastrar);
+// en el celu se abre con un toque y se elige manteniendo apretado.
 function FolderCard({
+  id,
   name,
   color,
   count,
-  onClick,
+  selected,
+  selecting,
+  cut,
+  renaming,
+  onRenamed,
+  onOpen,
+  onToggle,
+  onMouseSelect,
+  onMenu,
+  dragItems,
   onFileDrop,
 }: {
+  id: string;
   name: string;
   color: string;
   count: number;
-  onClick: () => void;
-  onFileDrop: (d: DragFile[]) => void;
+  selected: boolean;
+  selecting: boolean;
+  cut: boolean;
+  renaming: boolean;
+  onRenamed: (name: string | null) => void;
+  onOpen: () => void;
+  onToggle: () => void;
+  onMouseSelect: (e: React.MouseEvent) => void;
+  onMenu: (e: React.MouseEvent) => void;
+  dragItems: () => DragFile[];
+  onFileDrop: (d: DragFile[], copy: boolean) => void;
 }) {
+  const pointer = useRef('mouse');
+  const press = useRef<number>(undefined);
+  const longPressed = useRef(false);
   return (
     <DropTarget onFile={onFileDrop}>
       {(over) => (
-        <button
-          onClick={onClick}
-          className={`text-left border rounded-2xl flex items-center gap-3 p-3 transition active:scale-[.98] ${
-            over ? 'bg-accent-soft border-accent ring-2 ring-accent scale-[1.03]' : 'bg-surface border-line hover:border-muted/40 hover:shadow-sm'
-          }`}
-        >
-          <svg viewBox="0 0 48 40" className="w-9 h-auto shrink-0" aria-hidden>
-            <path d="M4 8a4 4 0 0 1 4-4h11l5 5h16a4 4 0 0 1 4 4v3H4z" fill={color} opacity=".55" />
-            <rect x="4" y="13" width="40" height="23" rx="4" fill={count ? color : 'var(--line)'} />
-          </svg>
-          <div className="min-w-0">
-            <div className="font-semibold leading-snug line-clamp-2 text-[15px]">{name}</div>
-            <div className="text-xs text-muted mt-0.5">
-              {over ? 'Soltá para mover acá' : count ? `${count} ${count === 1 ? 'archivo' : 'archivos'}` : 'Vacía'}
+        <div data-item={id} className={cut ? 'opacity-50' : ''}>
+          <button
+            onPointerDown={(e) => (pointer.current = e.pointerType)}
+            onClick={(e) => {
+              if (longPressed.current) return void (longPressed.current = false);
+              if (pointer.current === 'mouse') return onMouseSelect(e);
+              if (selecting) onToggle();
+              else onOpen();
+            }}
+            onDoubleClick={() => pointer.current === 'mouse' && onOpen()}
+            onContextMenu={(e) => (pointer.current === 'mouse' ? onMenu(e) : e.preventDefault())}
+            onTouchStart={() => {
+              press.current = window.setTimeout(() => {
+                longPressed.current = true;
+                navigator.vibrate?.(15);
+                onToggle();
+              }, 450);
+            }}
+            onTouchEnd={() => clearTimeout(press.current)}
+            onTouchMove={() => clearTimeout(press.current)}
+            draggable={!renaming}
+            onDragStart={(e) => {
+              e.dataTransfer.setData(DRAG_TYPE, JSON.stringify(dragItems()));
+              e.dataTransfer.effectAllowed = 'copyMove';
+            }}
+            className={`w-full text-left border rounded-2xl flex items-center gap-3 p-3 transition select-none [-webkit-touch-callout:none] ${
+              over
+                ? 'bg-accent-soft border-accent ring-2 ring-accent'
+                : selected
+                  ? 'bg-accent-soft border-accent ring-2 ring-accent'
+                  : 'bg-surface border-line hover:border-muted/40 hover:shadow-sm'
+            }`}
+          >
+            <svg viewBox="0 0 48 40" className="w-9 h-auto shrink-0" aria-hidden>
+              <path d="M4 8a4 4 0 0 1 4-4h11l5 5h16a4 4 0 0 1 4 4v3H4z" fill={color} opacity=".55" />
+              <rect x="4" y="13" width="40" height="23" rx="4" fill={count ? color : 'var(--line)'} />
+            </svg>
+            <div className="min-w-0 flex-1">
+              {renaming ? (
+                <RenameInput initial={name} isFile={false} onDone={onRenamed} />
+              ) : (
+                <div className="font-semibold leading-snug line-clamp-2 text-[15px]">{name}</div>
+              )}
+              <div className="text-xs text-muted mt-0.5">
+                {over ? 'Soltá para mover acá (Ctrl: copiar)' : count ? `${count} ${count === 1 ? 'archivo' : 'archivos'}` : 'Vacía'}
+              </div>
             </div>
-          </div>
-        </button>
+          </button>
+        </div>
       )}
     </DropTarget>
   );
 }
 
-// Recibe un cuadradito de archivo arrastrado. "contents" no altera la grilla.
-function DropTarget({ onFile, children }: { onFile: (d: DragFile[]) => void; children: (over: boolean) => ReactNode }) {
+// Recibe archivos o carpetas arrastrados. Con Ctrl apretado se copian en vez de moverse. "contents" no altera la grilla.
+function DropTarget({ onFile, children }: { onFile: (d: DragFile[], copy: boolean) => void; children: (over: boolean) => ReactNode }) {
   const [over, setOver] = useState(false);
   return (
     <div
@@ -981,7 +1409,7 @@ function DropTarget({ onFile, children }: { onFile: (d: DragFile[]) => void; chi
         if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
         e.preventDefault();
         e.stopPropagation();
-        e.dataTransfer.dropEffect = 'move';
+        e.dataTransfer.dropEffect = e.ctrlKey ? 'copy' : 'move';
         setOver(true);
       }}
       onDragLeave={(e) => {
@@ -993,7 +1421,7 @@ function DropTarget({ onFile, children }: { onFile: (d: DragFile[]) => void; chi
         e.preventDefault();
         e.stopPropagation();
         setOver(false);
-        onFile(JSON.parse(raw));
+        onFile(JSON.parse(raw), e.ctrlKey);
       }}
     >
       {children(over)}

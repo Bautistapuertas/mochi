@@ -127,6 +127,7 @@ export async function getFile(id: string) {
 }
 
 export async function createFolder(name: string, parent: string | undefined, appProperties: Record<string, string>) {
+  if (DEMO) return remember((await import('./demo')).demoCreateFolder(name, parent, appProperties));
   const r = await req(`${API}/files?fields=${FIELDS}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -139,6 +140,7 @@ export async function update(
   id: string,
   body: Partial<Omit<DFile, 'appProperties'>> & { trashed?: boolean; appProperties?: Record<string, string | null> },
   params: Record<string, string> = {}) {
+  if (DEMO) return remember((await import('./demo')).demoUpdate(id, body as never, params));
   const p = new URLSearchParams({ fields: FIELDS, ...params });
   const r = await req(`${API}/files/${id}?${p}`, {
     method: 'PATCH',

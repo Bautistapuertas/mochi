@@ -2,19 +2,23 @@ import { useState } from 'react';
 import { useFacu } from '../lib/context';
 import { move, type DFile } from '../lib/drive';
 import { folderPath, materiaFolders, whereLabel } from '../lib/facu';
+import { isInside } from '../lib/explorer';
 import { Button, Modal, errorText } from './ui';
 
-// Mover uno o varios archivos a otra materia o carpeta.
+// Mover uno o varios archivos (o carpetas) a otra materia o carpeta.
 export default function MoveModal({
   files,
   initialMateria,
   initialFolder,
+  exclude = [],
   onClose,
   onMoved,
 }: {
   files: DFile[];
   initialMateria?: string;
   initialFolder?: string;
+  // Carpetas que se están moviendo: no se pueden mover adentro de sí mismas.
+  exclude?: string[];
   onClose: () => void;
   onMoved: (moved: DFile[], where: string) => void;
 }) {
@@ -27,10 +31,10 @@ export default function MoveModal({
   const [error, setError] = useState('');
   const unchanged = materiaId === initialMateria && folderId === (initialFolder ?? '');
   const materia = tree.materias.get(materiaId);
-  const options = materia ? materiaFolders(materia) : [];
+  const options = (materia ? materiaFolders(materia) : []).filter((f) => !exclude.some((x) => isInside(tree, f.id, x)));
 
   return (
-    <Modal title={files.length === 1 ? 'Mover archivo' : `Mover ${files.length} archivos`} onClose={busy ? () => {} : onClose}>
+    <Modal title={files.length === 1 ? `Mover ${files[0].name}` : `Mover ${files.length} elementos`} onClose={busy ? () => {} : onClose}>
       <p className="font-semibold mb-2">Materia</p>
       <select
         value={materiaId}
