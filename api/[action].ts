@@ -41,8 +41,11 @@ export async function GET(req: Request) {
   }
 
   // Conector de Claude: datos para conectarse y entrada con Google.
-  if (action === 'wk-as') return metadata(url.origin, 'oauth-authorization-server');
-  if (action === 'wk-pr') return metadata(url.origin, 'oauth-protected-resource');
+  // En Vercel llega la dirección original (/.well-known/...), en la compu la reescrita (/api/wk-...).
+  if (action === 'wk-as' || url.pathname.startsWith('/.well-known/oauth-authorization-server'))
+    return metadata(url.origin, 'oauth-authorization-server');
+  if (action === 'wk-pr' || url.pathname.startsWith('/.well-known/oauth-protected-resource'))
+    return metadata(url.origin, 'oauth-protected-resource');
   if (action === 'authorize') return authorize(url);
   if (action === 'mcp') return new Response(null, { status: 405, headers: { Allow: 'POST' } });
 
