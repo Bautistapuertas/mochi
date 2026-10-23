@@ -1,0 +1,75 @@
+// Partes comunes del servidor: variables, cifrado de sesiones, cookies, respuestas y tokens de Google.
+
+export const SCOPES = 'openid email profile https://www.googleapis.com/auth/drive.file';
+export const SESSION = 'facu_session';
+export const STATE = 'facu_state';
+export const MAX_AGE = 400 * 24 * 60 * 60;
+
+export type Session = { rt: string; user: { email: string; name: string; picture?: string } };
+
+const enc = new TextEncoder();
+const dec = new TextDecoder();
+
+export function env(name: string) {
+  const v = process.env[name];
+  if (!v) throw new Error(`Falta la variable ${name} (ver docs/CONFIGURACION.md)`);
+  return v;
+}
+
+async function key() {
+  const raw = await crypto.subtle.digest('SHA-256', enc.encode(env('SESSION_SECRET')));
+  return crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt']);
+}
+
+// Guarda datos cifrados (AES-GCM) en un texto: sesiones, permisos del conector, etc.
+export async function seal(data: unknown) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(
+    await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await key(), enc.encode(JSON.stringify(data))),
+  );
+  return Buffer.concat([iv, ct]).toString('base64url');
+}
+
+export async function unseal<T = Session>(value: string | null | undefined): Promise<T | null> {
+  if (!value) return null;
+  try {
+    const buf = new Uint8Array(Buffer.from(value, 'base64url'));
+    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(0, 12) }, await key(), buf.slice(12));
+    return JSON.parse(dec.decode(pt));
+  } catch {
+    return null;
+  }
+}
+
+export function readCookie(req: Request, name: string) {
+  for (const part of (req.headers.get('cookie') ?? '').split(';')) {
+    const [k, ...v] = part.trim().split('=');
+    if (k === name) return decodeURIComponent(v.join('='));
+  }
+  return null;
+}
+
+export function cookie(name: string, value: string, maxAge: number, secure: boolean) {
+  return `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure ? '; Secure' : ''}`;
+}
+
+export function respond(status: number, body: unknown, cookies: string[] = [], location?: string) {
+  const headers = new Headers({ 'Cache-Control': 'no-store' });
+  if (location) headers.set('Location', location);
+  else headers.set('Content-Type', 'application/json');
+  for (const c of cookies) headers.append('Set-Cookie', c);
+  return new Response(location ? null : JSON.stringify(body), { status, headers });
+}
+
+export async function googleToken(params: Record<string, string>) {
+  const r = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: env('GOOGLE_CLIENT_ID'),
+      client_secret: env('GOOGLE_CLIENT_SECRET'),
+      ...params,
+    }),
+  });
+  return { ok: r.ok, data: await r.json() };
+}

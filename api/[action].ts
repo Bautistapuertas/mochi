@@ -1,78 +1,24 @@
 // Login con Google. Guarda el "refresh token" cifrado en una cookie para que
 // la sesión quede abierta, y le entrega a la app tokens de acceso a Drive.
 
-const SCOPES = 'openid email profile https://www.googleapis.com/auth/drive.file';
-const SESSION = 'facu_session';
-const STATE = 'facu_state';
-const MAX_AGE = 400 * 24 * 60 * 60;
+import {
+  MAX_AGE,
+  SCOPES,
+  SESSION,
+  STATE,
+  type Session,
+  cookie,
+  env,
+  googleToken,
+  readCookie,
+  respond,
+  seal,
+  unseal,
+} from './_shared';
+import { authorize, corsPreflight, googleCallback, mcp, metadata, register, token } from './_mcp';
 
-type Session = { rt: string; user: { email: string; name: string; picture?: string } };
-
-const enc = new TextEncoder();
-const dec = new TextDecoder();
-
-function env(name: string) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Falta la variable ${name} (ver docs/CONFIGURACION.md)`);
-  return v;
-}
-
-async function key() {
-  const raw = await crypto.subtle.digest('SHA-256', enc.encode(env('SESSION_SECRET')));
-  return crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt']);
-}
-
-async function seal(data: Session) {
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = new Uint8Array(
-    await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await key(), enc.encode(JSON.stringify(data))),
-  );
-  return Buffer.concat([iv, ct]).toString('base64url');
-}
-
-async function unseal(value: string | null): Promise<Session | null> {
-  if (!value) return null;
-  try {
-    const buf = new Uint8Array(Buffer.from(value, 'base64url'));
-    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(0, 12) }, await key(), buf.slice(12));
-    return JSON.parse(dec.decode(pt));
-  } catch {
-    return null;
-  }
-}
-
-function readCookie(req: Request, name: string) {
-  for (const part of (req.headers.get('cookie') ?? '').split(';')) {
-    const [k, ...v] = part.trim().split('=');
-    if (k === name) return decodeURIComponent(v.join('='));
-  }
-  return null;
-}
-
-function cookie(name: string, value: string, maxAge: number, secure: boolean) {
-  return `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure ? '; Secure' : ''}`;
-}
-
-function respond(status: number, body: unknown, cookies: string[] = [], location?: string) {
-  const headers = new Headers({ 'Cache-Control': 'no-store' });
-  if (location) headers.set('Location', location);
-  else headers.set('Content-Type', 'application/json');
-  for (const c of cookies) headers.append('Set-Cookie', c);
-  return new Response(location ? null : JSON.stringify(body), { status, headers });
-}
-
-async function googleToken(params: Record<string, string>) {
-  const r = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: env('GOOGLE_CLIENT_ID'),
-      client_secret: env('GOOGLE_CLIENT_SECRET'),
-      ...params,
-    }),
-  });
-  return { ok: r.ok, data: await r.json() };
-}
+// Pedidos previos de navegadores (CORS) para el conector de Claude.
+export const OPTIONS = () => corsPreflight();
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -94,7 +40,16 @@ export async function GET(req: Request) {
     return respond(302, null, [cookie(STATE, state, 600, secure)], `https://accounts.google.com/o/oauth2/v2/auth?${p}`);
   }
 
+  // Conector de Claude: datos para conectarse y entrada con Google.
+  if (action === 'wk-as') return metadata(url.origin, 'oauth-authorization-server');
+  if (action === 'wk-pr') return metadata(url.origin, 'oauth-protected-resource');
+  if (action === 'authorize') return authorize(url);
+  if (action === 'mcp') return new Response(null, { status: 405, headers: { Allow: 'POST' } });
+
   if (action === 'callback') {
+    // Si viene del conector de Claude, sigue por otro camino.
+    const st = url.searchParams.get('state') ?? '';
+    if (st.startsWith('m.')) return googleCallback(url, st);
     const clearState = cookie(STATE, '', 0, secure);
     if (url.searchParams.get('error')) return respond(302, null, [clearState], '/?error=cancelado');
     const state = url.searchParams.get('state');
@@ -307,7 +262,11 @@ type IaUse = { d: string; n: number };
 export async function POST(req: Request) {
   const url = new URL(req.url);
   const secure = url.protocol === 'https:';
-  if (url.pathname.split('/').pop() !== 'ia') return respond(404, { error: 'no_existe' });
+  const action = url.pathname.split('/').pop();
+  if (action === 'mcp') return mcp(req);
+  if (action === 'register') return register(req);
+  if (action === 'oauth-token') return token(req);
+  if (action !== 'ia') return respond(404, { error: 'no_existe' });
 
   const session = await unseal(readCookie(req, SESSION));
   if (!session) return respond(401, { error: 'sin_sesion' });

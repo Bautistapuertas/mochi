@@ -9,6 +9,9 @@ function apiDev(): Plugin {
     name: 'api-dev',
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
+        // Igual que las redirecciones de vercel.json para el conector de Claude.
+        if (req.url?.startsWith('/.well-known/oauth-authorization-server')) req.url = '/api/wk-as';
+        if (req.url?.startsWith('/.well-known/oauth-protected-resource')) req.url = '/api/wk-pr';
         if (!req.url?.startsWith('/api/')) return next();
         try {
           const mod = await server.ssrLoadModule('/api/[action].ts');
@@ -17,7 +20,7 @@ function apiDev(): Plugin {
           // Mismo manejo que Vercel: GET o POST según el pedido.
           const chunks: Buffer[] = [];
           for await (const c of req) chunks.push(c as Buffer);
-          const method = req.method === 'POST' ? 'POST' : 'GET';
+          const method = req.method === 'POST' ? 'POST' : req.method === 'OPTIONS' ? 'OPTIONS' : 'GET';
           const init: RequestInit = { method, headers };
           if (method === 'POST') init.body = Buffer.concat(chunks);
           const r: Response = await mod[method](new Request(`http://${req.headers.host}${req.url}`, init));
