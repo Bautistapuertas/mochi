@@ -47,11 +47,14 @@ export const corsPreflight = () =>
     },
   });
 
-// Solo se aceptan las direcciones de vuelta de Claude (web, app y Claude Code en la compu).
+// Solo se aceptan las direcciones de vuelta de asistentes conocidos: Claude, Gemini (web), Antigravity, ChatGPT,
+// y programas en tu propia compu (Claude Code, Gemini CLI). Así nadie puede usar el inicio de sesión de Mochi
+// para mandar tus permisos a otro lado.
+const TRUSTED = ['claude.ai', 'claude.com', 'antigravity.google', 'gemini.google.com', 'chatgpt.com', 'chat.openai.com'];
 function allowedRedirect(uri: string) {
   try {
     const u = new URL(uri);
-    if (u.protocol === 'https:' && ['claude.ai', 'claude.com'].includes(u.hostname) && u.pathname === '/api/mcp/auth_callback') return true;
+    if (u.protocol === 'https:') return TRUSTED.includes(u.hostname) || u.hostname.endsWith('.google.com');
     return u.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(u.hostname);
   } catch {
     return false;
@@ -75,7 +78,7 @@ export function metadata(origin: string, kind: string) {
     response_types_supported: ['code'],
     grant_types_supported: ['authorization_code', 'refresh_token'],
     code_challenge_methods_supported: ['S256'],
-    token_endpoint_auth_methods_supported: ['none'],
+    token_endpoint_auth_methods_supported: ['none', 'client_secret_post', 'client_secret_basic'],
     scopes_supported: ['mochi'],
   });
 }
@@ -84,7 +87,7 @@ export function metadata(origin: string, kind: string) {
 export async function register(req: Request) {
   const body = (await req.json().catch(() => ({}))) as { redirect_uris?: string[]; client_name?: string };
   const uris = (body.redirect_uris ?? []).filter(allowedRedirect);
-  if (!uris.length) return json(400, { error: 'invalid_redirect_uri', error_description: 'Solo se permite conectar desde Claude.' });
+  if (!uris.length) return json(400, { error: 'invalid_redirect_uri', error_description: 'Solo se permite conectar desde asistentes conocidos (Claude, Gemini, Antigravity, ChatGPT).' });
   return json(201, {
     client_id: `mochi-${crypto.randomUUID()}`,
     client_name: body.client_name ?? 'Claude',
@@ -101,9 +104,10 @@ export async function authorize(url: URL) {
   const p = url.searchParams;
   const ru = p.get('redirect_uri') ?? '';
   if (!allowedRedirect(ru)) return json(400, { error: 'invalid_request', error_description: 'Dirección de vuelta no permitida.' });
+  // PKCE se usa si el asistente lo manda (Claude sí; Antigravity puede usar un id y una clave en su lugar).
   const cc = p.get('code_challenge') ?? '';
-  if (p.get('response_type') !== 'code' || !cc || (p.get('code_challenge_method') ?? 'S256') !== 'S256')
-    return json(400, { error: 'invalid_request', error_description: 'Falta PKCE (S256).' });
+  if (p.get('response_type') !== 'code' || (cc && (p.get('code_challenge_method') ?? 'S256') !== 'S256'))
+    return json(400, { error: 'invalid_request', error_description: 'Pedido inválido.' });
   const pending: Pending = { k: 'pend', ru, st: p.get('state') ?? '', cc, exp: now() + 15 * 60 };
   const g = new URLSearchParams({
     client_id: env('GOOGLE_CLIENT_ID'),
@@ -167,9 +171,11 @@ export async function token(req: Request) {
     const code = await unseal<Code>(p.get('code'));
     if (!code || code.k !== 'code' || code.exp < now()) return bad('El código venció.');
     if (p.get('redirect_uri') && p.get('redirect_uri') !== code.ru) return bad('La dirección no coincide.');
-    const verifier = p.get('code_verifier') ?? '';
-    const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
-    if (challenge !== code.cc) return bad('PKCE no coincide.');
+    if (code.cc) {
+      const verifier = p.get('code_verifier') ?? '';
+      const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+      if (challenge !== code.cc) return bad('PKCE no coincide.');
+    }
     return issue(code.rt, code.user);
   }
   if (p.get('grant_type') === 'refresh_token') {
