@@ -14,8 +14,8 @@ import {
   respond,
   seal,
   unseal,
-} from './_shared';
-import { authorize, corsPreflight, googleCallback, mcp, metadata, register, token } from './_mcp';
+} from './_shared.js';
+import { authorize, corsPreflight, googleCallback, mcp, metadata, register, token } from './_mcp.js';
 
 // Pedidos previos de navegadores (CORS) para el conector de Claude.
 export const OPTIONS = () => corsPreflight();

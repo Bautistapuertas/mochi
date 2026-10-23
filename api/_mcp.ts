@@ -6,7 +6,7 @@
 //
 // No se guarda nada en ningún servidor: los permisos viajan cifrados (AES-GCM) dentro de los tokens.
 
-import { SCOPES, env, googleToken, seal, unseal } from './_shared';
+import { SCOPES, env, googleToken, seal, unseal } from './_shared.js';
 import {
   Drive,
   containerIds,
@@ -19,7 +19,7 @@ import {
   readContent,
   where,
   type Content,
-} from './_mochi';
+} from './_mochi.js';
 
 type User = { email: string; name: string };
 type Pending = { k: 'pend'; ru: string; st: string; cc: string; exp: number };
