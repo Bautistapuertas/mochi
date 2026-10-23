@@ -225,23 +225,38 @@ export function FileBadge({ file, size = 'md' }: { file: { name: string; mimeTyp
   );
 }
 
-const ToastCtx = createContext<(msg: string) => void>(() => {});
+// Aviso de abajo. Puede tener un botón, por ejemplo "Deshacer".
+export type ToastAction = { label: string; onClick: () => void };
+const ToastCtx = createContext<(msg: string, action?: ToastAction) => void>(() => {});
 export const useToast = () => useContext(ToastCtx);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ text: string; action?: ToastAction } | null>(null);
   const timer = useRef<number>(undefined);
-  const show = useCallback((m: string) => {
-    setMsg(m);
+  const show = useCallback((text: string, action?: ToastAction) => {
+    setMsg({ text, action });
     clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setMsg(null), 3200);
+    timer.current = window.setTimeout(() => setMsg(null), action ? 6000 : 3200);
   }, []);
   return (
     <ToastCtx.Provider value={show}>
       {children}
       {msg && (
         <div className="fixed inset-x-0 bottom-6 z-[80] flex justify-center px-4 pointer-events-none safe-bottom">
-          <div className="bg-ink text-bg px-5 py-3 rounded-2xl shadow-lg text-[15px] font-medium">{msg}</div>
+          <div className="pointer-events-auto bg-ink text-bg pl-5 pr-2 py-2 min-h-12 rounded-2xl shadow-lg text-[15px] font-medium flex items-center gap-3">
+            <span className="py-1 pr-3">{msg.text}</span>
+            {msg.action && (
+              <button
+                onClick={() => {
+                  setMsg(null);
+                  msg.action!.onClick();
+                }}
+                className="h-9 px-3 rounded-xl font-semibold text-accent hover:bg-white/10 whitespace-nowrap"
+              >
+                {msg.action.label}
+              </button>
+            )}
+          </div>
         </div>
       )}
     </ToastCtx.Provider>

@@ -37,16 +37,19 @@ import {
   type Materia,
 } from '../lib/facu';
 import { keepOffline } from '../lib/fileBlob';
-import { ClipboardPaste, Copy, FolderPlus, RefreshCw, Scissors } from 'lucide-react';
+import { ClipboardPaste, Copy, FolderPlus, RefreshCw, Scissors, Undo2 } from 'lucide-react';
 import ContextMenu, { type CtxItem } from '../components/ContextMenu';
 import RenameInput from '../components/RenameInput';
 import {
   CLIPBOARD,
   copyItems,
   getClipboard,
+  canUndo,
   moveItems,
-  newFolderName,
+  newFolder,
   paste,
+  recordMove,
+  undoLast,
   removeItems,
   renameItem,
   setClipboard,
@@ -89,6 +92,9 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
   const current = found && found.materia.id === id ? found : undefined;
   const [files, setFiles] = useState<FileItem[] | null>(null);
   const [picked, setPicked] = useState<UploadItem[] | null>(null);
+  // Carpeta donde se sube lo que se soltó encima (si no, la carpeta abierta).
+  const [uploadDest, setUploadDest] = useState<{ id: string; name: string } | null>(null);
+  const [hoverFolder, setHoverFolder] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [modal, setModal] = useState<ModalKind | null>(null);
   const [sort, setSort] = useState<Sort>(readSort);
@@ -231,9 +237,23 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
   const destId = current?.id ?? m.id;
   const destName = current?.name ?? m.name;
 
+  // Archivos de la compu soltados encima de una carpeta: se suben adentro de esa carpeta.
+  const uploadTo = async (dt: DataTransfer, id: string, name: string) => {
+    const pending = itemsFromDrop(dt);
+    setDragging(false);
+    setHoverFolder(null);
+    const items = mergeSameName(await pending, name);
+    if (items.length) {
+      setUploadDest({ id, name });
+      setPicked(items);
+    }
+  };
+
   const onDrop = async (e: DragEvent) => {
     e.preventDefault();
     setDragging(false);
+    setHoverFolder(null);
+    setUploadDest(null);
     if (!e.dataTransfer.types.includes('Files')) return;
     const items = mergeSameName(await itemsFromDrop(e.dataTransfer), destName);
     if (items.length) setPicked(items);
@@ -267,12 +287,22 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
 
   const plural = (n: number) => (n === 1 ? '1 elemento' : `${n} elementos`);
 
+  // Ctrl+Z, o el botón "Deshacer" del aviso de abajo.
+  const doUndo = () =>
+    run(async () => {
+      const what = await undoLast();
+      if (!what) return 'No hay nada para deshacer';
+      await refresh();
+      return `Se deshizo: ${what}`;
+    });
+  const undoToast = (msg: string) => toast(msg, { label: 'Deshacer', onClick: doUndo });
+
   const moveTo = (list: DragFile[], targetId: string, targetName: string, copy = false) =>
     run(async () => {
       const n = copy ? await copyItems(tree, list, targetId) : await moveItems(tree, list, targetId);
       clearSelection();
       await refresh();
-      if (n) return `${plural(n)} ${copy ? 'copiados' : 'movidos'} a ${targetName}`;
+      if (n) undoToast(`${plural(n)} ${copy ? 'copiados' : 'movidos'} a ${targetName}`);
     });
 
   const toggle = (fid: string) =>
@@ -318,13 +348,13 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
       if (!c) return;
       const n = await paste(tree, dest, (i, t) => t > 1 && toast(`Pegando ${i + 1} de ${t}…`));
       await refresh();
-      return `${plural(n)} ${c.mode === 'cut' ? 'movidos' : 'pegados'} en ${name}`;
+      undoToast(`${plural(n)} ${c.mode === 'cut' ? 'movidos' : 'pegados'} en ${name}`);
     });
 
   // Como en Windows: aparece "Nueva carpeta" y se le escribe el nombre ahí mismo.
   const newFolderInline = () =>
     run(async () => {
-      const f = await addFolder(await newFolderName(destId), destId);
+      const f = await newFolder(destId);
       await reload();
       setSelected(new Set([f.id]));
       anchor.current = f.id;
@@ -335,7 +365,7 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
     setRenaming(null);
     if (!name) return;
     run(async () => {
-      await renameItem(it.id, name);
+      await renameItem(it, name);
       await refresh();
     });
   };
@@ -417,6 +447,7 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
       x: e.clientX,
       y: e.clientY,
       items: [
+        ...(canUndo() ? [{ label: 'Deshacer', icon: <Undo2 size={16} />, shortcut: 'Ctrl+Z', onClick: doUndo }, 'sep' as const] : []),
         { label: 'Nueva carpeta', icon: <FolderPlus size={16} />, shortcut: 'Ctrl+Shift+N', onClick: newFolderInline },
         { label: clip ? `Pegar ${plural(clip.items.length)}` : 'Pegar', icon: <ClipboardPaste size={16} />, shortcut: 'Ctrl+V', disabled: !clip, onClick: () => doPaste() },
         'sep',
@@ -505,6 +536,7 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
     const mod = e.ctrlKey || e.metaKey;
     const k = e.key.toLowerCase();
     if (mod && e.shiftKey && k === 'n') newFolderInline();
+    else if (mod && k === 'z') doUndo();
     else if (mod && k === 'a') setSelected(new Set(items.map((i) => i.id)));
     else if (mod && k === 'c') copyOrCut('copy');
     else if (mod && k === 'x') copyOrCut('cut');
@@ -671,6 +703,8 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
                   onMenu={itemMenu(it)}
                   dragItems={dragFor(it)}
                   onFileDrop={(d, copy) => moveTo(d, f.id, f.name, copy)}
+                  onUpload={(dt) => uploadTo(dt, f.id, f.name)}
+                  onUploadHover={(on) => setHoverFolder(on ? f.name : null)}
                 />
               );
             })}
@@ -761,9 +795,11 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
               color={m.color}
               onClick={() => openFolder()}
               onFileDrop={(d, copy) => moveTo(d, m.id, m.name, copy)}
+              onUpload={(dt) => uploadTo(dt, m.id, m.name)}
+              onUploadHover={(on) => setHoverFolder(on ? m.name : null)}
             />
             {m.folders.map((f) => (
-              <FolderTree key={f.id} folder={f} depth={0} current={current} path={path} counts={counts} color={m.color} open={openFolder} drop={moveTo} menu={treeMenu} />
+              <FolderTree key={f.id} folder={f} depth={0} current={current} path={path} counts={counts} color={m.color} open={openFolder} drop={moveTo} menu={treeMenu} upload={uploadTo} hover={setHoverFolder} />
             ))}
             <button
               onClick={newFolderInline}
@@ -957,7 +993,8 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
           initialFolder={current?.id}
           onClose={() => setBulk(null)}
           onMoved={(moved, where) => {
-            toast(`${plural(moved.length)} movidos a ${where}`);
+            recordMove(selectedItems.filter((i) => moved.some((x) => x.id === i.id)), moved[0]?.parents?.[0] ?? '');
+            undoToast(`${plural(moved.length)} movidos a ${where}`);
             clearSelection();
             refresh();
           }}
@@ -971,7 +1008,7 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
           onClose={() => setToDelete(null)}
           onConfirm={async () => {
             await removeItems(toDelete);
-            toast(`${plural(toDelete.length)} en la papelera de Drive`);
+            undoToast(`${plural(toDelete.length)} en la papelera de Drive`);
             clearSelection();
             await refresh();
           }}
@@ -983,7 +1020,7 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
           initial={renameTarget.name}
           onClose={() => setRenameTarget(null)}
           onSubmit={async (name) => {
-            await renameItem(renameTarget.id, name);
+            await renameItem(renameTarget, name);
             await refresh();
           }}
         />
@@ -998,24 +1035,29 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
       )}
 
       {dragging && (
-        <div className="fixed inset-3 z-40 rounded-3xl border-4 border-dashed border-accent bg-accent-soft/80 grid place-items-center pointer-events-none">
-          <p className="text-xl font-bold text-accent text-center px-6">Soltá para subir a {destName}</p>
+        <div className="fixed inset-3 z-40 rounded-3xl border-4 border-dashed border-accent bg-accent-soft/20 flex justify-center items-start pt-6 pointer-events-none">
+          <p className="px-5 py-2.5 rounded-full bg-accent text-on-accent font-bold shadow-lg text-center">
+            Soltá para subir a {hoverFolder ?? destName}
+          </p>
         </div>
       )}
 
       {picked && (
         <UploadSheet
           items={picked}
-          parentId={destId}
-          destName={destName}
+          parentId={uploadDest?.id ?? destId}
+          destName={uploadDest?.name ?? destName}
           onClose={() => {
             setPicked(null);
+            setUploadDest(null);
             reload();
           }}
           onDone={async (n) => {
+            const where = uploadDest?.name ?? destName;
             setPicked(null);
-            toast(n === 1 ? `Guardado en ${destName}` : `${n} archivos guardados en ${destName}`);
-            await reload();
+            setUploadDest(null);
+            toast(n === 1 ? `Guardado en ${where}` : `${n} archivos guardados en ${where}`);
+            await refresh();
           }}
         />
       )}
@@ -1162,6 +1204,8 @@ function FolderTree({
   open,
   drop,
   menu,
+  upload,
+  hover,
 }: {
   folder: Folder;
   depth: number;
@@ -1172,6 +1216,8 @@ function FolderTree({
   open: (f?: Folder) => void;
   drop: (d: DragFile[], id: string, name: string, copy: boolean) => void;
   menu: (f: Folder) => (e: React.MouseEvent) => void;
+  upload: (dt: DataTransfer, id: string, name: string) => void;
+  hover: (name: string | null) => void;
 }) {
   const inPath = path.some((p) => p.id === folder.id);
   const [expanded, setExpanded] = useState(inPath);
@@ -1195,10 +1241,12 @@ function FolderTree({
         }}
         onFileDrop={(d, copy) => drop(d, folder.id, folder.name, copy)}
         onMenu={menu(folder)}
+        onUpload={(dt) => upload(dt, folder.id, folder.name)}
+        onUploadHover={(on) => hover(on ? folder.name : null)}
       />
       {expanded &&
         folder.children.map((c) => (
-          <FolderTree key={c.id} folder={c} depth={depth + 1} current={current} path={path} counts={counts} color={color} open={open} drop={drop} menu={menu} />
+          <FolderTree key={c.id} folder={c} depth={depth + 1} current={current} path={path} counts={counts} color={color} open={open} drop={drop} menu={menu} upload={upload} hover={hover} />
         ))}
     </>
   );
@@ -1216,6 +1264,8 @@ function TreeItem({
   onClick,
   onFileDrop,
   onMenu,
+  onUpload,
+  onUploadHover,
 }: {
   label: string;
   depth: number;
@@ -1228,9 +1278,11 @@ function TreeItem({
   onClick: () => void;
   onFileDrop: (d: DragFile[], copy: boolean) => void;
   onMenu?: (e: React.MouseEvent) => void;
+  onUpload?: (dt: DataTransfer) => void;
+  onUploadHover?: (on: boolean) => void;
 }) {
   return (
-    <DropTarget onFile={onFileDrop}>
+    <DropTarget onFile={onFileDrop} onUpload={onUpload} onUploadHover={onUploadHover}>
       {(over) => (
         <div
           className={`group flex items-center h-9 rounded-xl text-sm transition ${
@@ -1318,6 +1370,8 @@ function FolderCard({
   onMenu,
   dragItems,
   onFileDrop,
+  onUpload,
+  onUploadHover,
 }: {
   id: string;
   name: string;
@@ -1334,12 +1388,14 @@ function FolderCard({
   onMenu: (e: React.MouseEvent) => void;
   dragItems: () => DragFile[];
   onFileDrop: (d: DragFile[], copy: boolean) => void;
+  onUpload: (dt: DataTransfer) => void;
+  onUploadHover: (on: boolean) => void;
 }) {
   const pointer = useRef('mouse');
   const press = useRef<number>(undefined);
   const longPressed = useRef(false);
   return (
-    <DropTarget onFile={onFileDrop}>
+    <DropTarget onFile={onFileDrop} onUpload={onUpload} onUploadHover={onUploadHover}>
       {(over) => (
         <div data-item={id} className={cut ? 'opacity-50' : ''}>
           <button
@@ -1385,7 +1441,7 @@ function FolderCard({
                 <div className="font-semibold leading-snug line-clamp-2 text-[15px]">{name}</div>
               )}
               <div className="text-xs text-muted mt-0.5">
-                {over ? 'Soltá para mover acá (Ctrl: copiar)' : count ? `${count} ${count === 1 ? 'archivo' : 'archivos'}` : 'Vacía'}
+                {over ? 'Soltá acá' : count ? `${count} ${count === 1 ? 'archivo' : 'archivos'}` : 'Vacía'}
               </div>
             </div>
           </button>
@@ -1396,28 +1452,52 @@ function FolderCard({
 }
 
 // Recibe archivos o carpetas arrastrados. Con Ctrl apretado se copian en vez de moverse. "contents" no altera la grilla.
-function DropTarget({ onFile, children }: { onFile: (d: DragFile[], copy: boolean) => void; children: (over: boolean) => ReactNode }) {
+// También recibe archivos y carpetas que se sueltan desde la compu: se suben adentro de esta carpeta.
+function DropTarget({
+  onFile,
+  onUpload,
+  onUploadHover,
+  children,
+}: {
+  onFile: (d: DragFile[], copy: boolean) => void;
+  onUpload?: (dt: DataTransfer) => void;
+  onUploadHover?: (on: boolean) => void;
+  children: (over: boolean) => ReactNode;
+}) {
   const [over, setOver] = useState(false);
+  const fromApp = (e: DragEvent) => e.dataTransfer.types.includes(DRAG_TYPE);
+  const fromPc = (e: DragEvent) => !!onUpload && e.dataTransfer.types.includes('Files');
+  const leave = () => {
+    setOver(false);
+    onUploadHover?.(false);
+  };
   return (
     <div
       className="contents"
       onDragOver={(e) => {
-        if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
+        if (!fromApp(e) && !fromPc(e)) return;
         e.preventDefault();
         e.stopPropagation();
-        e.dataTransfer.dropEffect = e.ctrlKey ? 'copy' : 'move';
+        e.dataTransfer.dropEffect = fromPc(e) || e.ctrlKey ? 'copy' : 'move';
+        if (!over && fromPc(e)) onUploadHover?.(true);
         setOver(true);
       }}
       onDragLeave={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(false);
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) leave();
       }}
       onDrop={(e) => {
         const raw = e.dataTransfer.getData(DRAG_TYPE);
-        if (!raw) return;
-        e.preventDefault();
-        e.stopPropagation();
-        setOver(false);
-        onFile(JSON.parse(raw), e.ctrlKey);
+        if (raw) {
+          e.preventDefault();
+          e.stopPropagation();
+          leave();
+          onFile(JSON.parse(raw), e.ctrlKey);
+        } else if (fromPc(e)) {
+          e.preventDefault();
+          e.stopPropagation();
+          leave();
+          onUpload!(e.dataTransfer);
+        }
       }}
     >
       {children(over)}

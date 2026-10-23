@@ -105,6 +105,7 @@ export function demoUpdate(id: string, body: Body, params: Record<string, string
   if (!f) throw new Error('No existe');
   if (body.name) f.name = body.name;
   if (body.trashed) trashed.add(id);
+  if (body.trashed === false) trashed.delete(id);
   if (body.appProperties)
     for (const [k, v] of Object.entries(body.appProperties)) {
       f.appProperties ??= {};
