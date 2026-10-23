@@ -871,10 +871,6 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
               )}
             </div>
             {content}
-            <p className="hidden lg:block text-sm text-muted mt-10 text-center">
-              Funciona como el Explorador de Windows: clic para elegir, doble clic para abrir, clic derecho para más opciones,
-              Ctrl+C / Ctrl+X / Ctrl+V, F2 para renombrar y Supr para eliminar. Arrastrá archivos desde tu compu para subirlos.
-            </p>
           </div>
         </main>
       </div>
