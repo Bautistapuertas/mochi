@@ -27,6 +27,7 @@ type Code = { k: 'code'; rt: string; user: User; ru: string; cc: string; exp: nu
 type Access = { k: 'at'; rt: string; user: User; exp: number };
 type Refresh = { k: 'rt'; rt: string; user: User };
 
+const ORIGIN = 'https://mochi-facu.vercel.app';
 const ACCESS_TTL = 60 * 60; // 1 hora; después Claude lo renueva solo.
 
 const json = (status: number, body: unknown, headers: Record<string, string> = {}) =>
@@ -361,7 +362,18 @@ async function handle(msg: Rpc, auth: Access): Promise<unknown | undefined> {
       return ok({
         protocolVersion: (msg.params?.protocolVersion as string) ?? '2025-06-18',
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: 'Mochi', title: 'Mochi', version: '1.0.0' },
+        serverInfo: {
+          name: 'Mochi',
+          title: 'Mochi',
+          version: '1.0.0',
+          websiteUrl: ORIGIN,
+          // El logo de Mochi, para que Claude lo muestre al lado del conector.
+          icons: [
+            { src: `${ORIGIN}/pwa-192x192.png`, mimeType: 'image/png', sizes: ['192x192'] },
+            { src: `${ORIGIN}/pwa-512x512.png`, mimeType: 'image/png', sizes: ['512x512'] },
+            { src: `${ORIGIN}/icon.svg`, mimeType: 'image/svg+xml', sizes: ['any'] },
+          ],
+        },
         instructions: INSTRUCTIONS,
       });
     case 'ping':
