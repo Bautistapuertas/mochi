@@ -46,6 +46,13 @@ async function read(rootId: string): Promise<Datos> {
       try { await update(f.id, { appProperties: { facu: 'datos' } }); } catch {}
     }
   }
+  if (!f) {
+    const globalCandidates = await list(`name = 'Mochi - fechas.json' and trashed=false`);
+    f = globalCandidates[0];
+    if (f && f.appProperties?.facu !== 'datos') {
+      try { await update(f.id, { appProperties: { facu: 'datos' } }); } catch {}
+    }
+  }
   if (!f) return empty();
   fileId = f.id;
   let text: string;

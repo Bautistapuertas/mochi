@@ -67,21 +67,41 @@ const byName = <T extends { name: string }>(a: T, b: T) => a.name.localeCompare(
 export async function loadTree(): Promise<Tree> {
   const all = await list(`mimeType='${FOLDER}' and trashed=false`);
 
-  // 1. Identificar la carpeta 'Facultad'
-  let root = all.find((f) => f.appProperties?.facu === 'root');
-  const facuCandidates = all.filter((f) => f.name.trim().toLowerCase() === 'facultad');
-  if (facuCandidates.length > 0) {
-    const withChildren = facuCandidates
-      .map((c) => ({
-        folder: c,
-        childrenCount: all.filter((f) => f.parents?.includes(c.id)).length,
-      }))
-      .sort((a, b) => b.childrenCount - a.childrenCount)[0];
-
-    const currentRootChildren = root ? all.filter((f) => f.parents?.includes(root!.id)).length : 0;
-    if (!root || withChildren.childrenCount > currentRootChildren) {
-      root = withChildren.folder;
+  const countDescendants = (folderId: string) => {
+    let count = 0;
+    const queue = [folderId];
+    while (queue.length > 0) {
+      const curr = queue.shift()!;
+      const children = all.filter((f) => f.parents?.includes(curr));
+      count += children.length;
+      for (const c of children) queue.push(c.id);
     }
+    return count;
+  };
+
+  // 1. Identificar la carpeta real 'Facultad'
+  let root: DFile | null = null;
+
+  // Si existe el archivo 'Mochi - fechas.json', su carpeta contenedora es 100% la real
+  try {
+    const fechas = (await list(`name = 'Mochi - fechas.json' and trashed=false`, { firstPageOnly: true }))[0];
+    if (fechas?.parents?.[0]) {
+      root = all.find((f) => f.id === fechas.parents![0]) ?? null;
+    }
+  } catch {}
+
+  // Si no se encontró por fechas, buscar entre todas las que se llamen 'Facultad' la que más subcarpetas tenga
+  if (!root) {
+    const facuCandidates = all.filter((f) => f.name.trim().toLowerCase() === 'facultad');
+    if (facuCandidates.length > 0) {
+      root = facuCandidates
+        .map((c) => ({ folder: c, count: countDescendants(c.id) }))
+        .sort((a, b) => b.count - a.count)[0].folder;
+    }
+  }
+
+  if (!root) {
+    root = all.find((f) => f.appProperties?.facu === 'root') ?? null;
   }
 
   if (!root) {
@@ -93,13 +113,13 @@ export async function loadTree(): Promise<Tree> {
     } catch {}
   }
 
-  // 2. Reconocer y adoptar carpetas de Año adentro de root si no tienen appProperties
+  // 2. Reconocer y adoptar carpetas de Año adentro de root
   for (const f of all) {
     if (f.parents?.includes(root.id)) {
       const idx = YEAR_NAMES.findIndex((y) => y.toLowerCase() === f.name.trim().toLowerCase());
       const match = f.name.match(/^([1-7])(?:er|do|er|to|mo)?\s*año/i);
       const order = idx !== -1 ? idx + 1 : match ? Number(match[1]) : 0;
-      if (order > 0 && f.appProperties?.facu !== 'year') {
+      if (order > 0) {
         f.appProperties = { ...f.appProperties, facu: 'year', order: String(order) };
         try {
           await update(f.id, { appProperties: f.appProperties });
@@ -114,20 +134,22 @@ export async function loadTree(): Promise<Tree> {
     .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, 'es'));
   const yearById = new Map(years.map((y) => [y.id, y]));
 
-  // 3. Reconocer y adoptar Materias adentro de los Años si no tienen appProperties
+  // 3. Reconocer y adoptar Materias adentro de los Años
   let colorIdx = 0;
   for (const f of all) {
     const parentId = f.parents?.[0];
-    if (parentId && yearById.has(parentId) && f.appProperties?.facu !== 'materia') {
-      f.appProperties = {
-        ...f.appProperties,
-        facu: 'materia',
-        color: f.appProperties?.color ?? COLORS[colorIdx++ % COLORS.length],
-        estado: f.appProperties?.estado ?? 'cursando',
-      };
-      try {
-        await update(f.id, { appProperties: f.appProperties });
-      } catch {}
+    if (parentId && yearById.has(parentId)) {
+      if (f.appProperties?.facu !== 'materia') {
+        f.appProperties = {
+          ...f.appProperties,
+          facu: 'materia',
+          color: f.appProperties?.color ?? COLORS[colorIdx++ % COLORS.length],
+          estado: f.appProperties?.estado ?? 'cursando',
+        };
+        try {
+          await update(f.id, { appProperties: f.appProperties });
+        } catch {}
+      }
     }
   }
 
