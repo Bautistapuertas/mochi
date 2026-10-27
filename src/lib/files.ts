@@ -71,6 +71,9 @@ export const naturalCompare = (a: string, b: string) => a.localeCompare(b, 'es',
 const SEP = /^[\s\-–—_.:|·]+/;
 const CODE = /^((?:c|clase|u|unidad|tp|t\.p\.|cap(?:itulo)?|tema|guia|gu[ií]a|ej(?:ercicio)?|parcial|semana)\s*\.?\s*\d+[a-z]?)\s*[-–—_.:|·]\s*(.+)$/i;
 
+// Un número o una fecha suelta: "10", "27-10", "27/10/2026".
+const DATE_LIKE = /^\d{1,4}([-/._ ]\d{1,4})*$/;
+
 // Saca lo que se repite al principio de todos los nombres ("UTN DS26 - ")
 // y separa el número de clase ("C21") del título.
 export function cleanNames(files: { id: string; name: string }[]) {
@@ -88,9 +91,11 @@ export function cleanNames(files: { id: string; name: string }[]) {
   }
   const out = new Map<string, { code?: string; title: string }>();
   files.forEach((f, i) => {
-    const rest = bases[i].slice(prefix.length).replace(SEP, '') || bases[i];
+    let rest = bases[i].slice(prefix.length).replace(SEP, '') || bases[i];
+    // Si lo que queda es solo un número o una fecha ("10", "27-10"), el nombre no se corta.
+    if (DATE_LIKE.test(rest)) rest = bases[i];
     const m = rest.match(CODE);
-    out.set(f.id, m ? { code: m[1].replace(/\s+/g, ' ').toUpperCase(), title: m[2] } : { title: rest });
+    out.set(f.id, m && !DATE_LIKE.test(m[2].trim()) ? { code: m[1].replace(/\s+/g, ' ').toUpperCase(), title: m[2] } : { title: rest });
   });
   return out;
 }
