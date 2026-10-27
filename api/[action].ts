@@ -56,14 +56,26 @@ export async function GET(req: Request) {
     const clearState = cookie(STATE, '', 0, secure);
     if (url.searchParams.get('error')) return respond(302, null, [clearState], '/?error=cancelado');
     const state = url.searchParams.get('state');
-    if (!state || state !== readCookie(req, STATE)) return respond(302, null, [clearState], '/?error=reintentar');
+    const cookieState = readCookie(req, STATE);
+    if (!state || (cookieState && state !== cookieState)) {
+      console.error('State mismatch:', { state, cookieState });
+      return respond(302, null, [clearState], '/?error=reintentar&detail=state_mismatch');
+    }
 
     const { ok, data } = await googleToken({
       code: url.searchParams.get('code') ?? '',
       redirect_uri: redirectUri,
       grant_type: 'authorization_code',
     });
-    if (!ok || !data.refresh_token) return respond(302, null, [clearState], '/?error=reintentar');
+    if (!ok) {
+      console.error('googleToken error:', data);
+      const detail = data?.error_description || data?.error || 'token_error';
+      return respond(302, null, [clearState], `/?error=reintentar&detail=${encodeURIComponent(detail)}`);
+    }
+    if (!data.refresh_token) {
+      console.error('Missing refresh_token:', data);
+      return respond(302, null, [clearState], '/?error=reintentar&detail=no_refresh_token');
+    }
     if (!String(data.scope).includes('drive.file')) return respond(302, null, [clearState], '/?error=falta_drive');
 
     const claims = JSON.parse(Buffer.from(String(data.id_token).split('.')[1], 'base64url').toString());

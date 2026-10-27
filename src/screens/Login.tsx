@@ -5,7 +5,10 @@ const ERRORS: Record<string, string> = {
 };
 
 export default function Login({ sharing = false }: { sharing?: boolean }) {
-  const error = ERRORS[new URLSearchParams(location.search).get('error') ?? ''];
+  const params = new URLSearchParams(location.search);
+  const errorKey = params.get('error') ?? '';
+  const detail = params.get('detail');
+  const error = ERRORS[errorKey];
   return (
     <div className="min-h-dvh flex flex-col items-center justify-center px-6 py-12 text-center">
       <img src="/icon.svg" alt="" className="size-20 rounded-3xl shadow-md" />
@@ -21,7 +24,12 @@ export default function Login({ sharing = false }: { sharing?: boolean }) {
         </p>
       )}
 
-      {error && <p className="mt-6 max-w-sm bg-accent-soft text-ink rounded-2xl px-4 py-3 text-[15px]">{error}</p>}
+      {error && (
+        <p className="mt-6 max-w-sm bg-accent-soft text-ink rounded-2xl px-4 py-3 text-[15px]">
+          {error}
+          {detail && <span className="block text-xs opacity-75 mt-1 font-mono break-all">Motivo: {detail}</span>}
+        </p>
+      )}
 
       <a
         href="/api/login"
