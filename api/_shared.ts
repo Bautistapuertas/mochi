@@ -13,7 +13,7 @@ const dec = new TextDecoder();
 export function env(name: string) {
   const v = process.env[name];
   if (!v) throw new Error(`Falta la variable ${name} (ver docs/CONFIGURACION.md)`);
-  return v;
+  return v.trim().split(/[\r\n\s]+/)[0];
 }
 
 async function key() {
