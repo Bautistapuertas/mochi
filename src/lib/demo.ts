@@ -54,9 +54,108 @@ export function demoList(q: string): DFile[] {
   return alive(inIds(demoFiles));
 }
 
+const demoBlobs = new Map<string, Blob>();
+
+export function demoSaveContent(id: string, content: Blob): DFile {
+  demoBlobs.set(id, content);
+  const f = all().find((x) => x.id === id);
+  if (!f) throw new Error('No existe');
+  f.modifiedTime = new Date().toISOString();
+  f.size = String(content.size);
+  return f;
+}
+
+export function demoCreateFile(name: string, parent: string, content: Blob, mimeType = 'application/json'): DFile {
+  const id = `f_demo_${Math.random().toString(36).slice(2, 8)}`;
+  const f: DFile = {
+    id,
+    name,
+    mimeType,
+    modifiedTime: new Date().toISOString(),
+    size: String(content.size),
+    parents: [parent],
+  };
+  demoFiles.unshift(f);
+  demoBlobs.set(id, content);
+  return f;
+}
+
 // Un PDF chiquito de 3 páginas armado a mano, para probar el lector sin cuenta.
 export async function demoBlob(id: string): Promise<Blob> {
+  if (demoBlobs.has(id)) return demoBlobs.get(id)!;
   const f = demoFiles.find((x) => x.id === id);
+  if (f && /\.excalidraw$/i.test(f.name)) {
+    const demoScene = JSON.stringify({
+      type: 'excalidraw',
+      version: 2,
+      source: 'https://mochi-facu.vercel.app',
+      elements: [
+        {
+          type: 'rectangle',
+          version: 1,
+          versionNonce: 1,
+          isDeleted: false,
+          id: 'rect1',
+          fillStyle: 'solid',
+          strokeWidth: 2,
+          strokeStyle: 'solid',
+          roughness: 1,
+          opacity: 100,
+          angle: 0,
+          x: 100,
+          y: 100,
+          strokeColor: '#228be6',
+          backgroundColor: '#e7f5ff',
+          width: 220,
+          height: 90,
+          seed: 1,
+          groupIds: [],
+          roundness: { type: 3 },
+          boundElements: [],
+          updated: 1,
+          link: null,
+          locked: false,
+        },
+        {
+          type: 'text',
+          version: 1,
+          versionNonce: 1,
+          isDeleted: false,
+          id: 'text1',
+          fillStyle: 'solid',
+          strokeWidth: 1,
+          strokeStyle: 'solid',
+          roughness: 1,
+          opacity: 100,
+          angle: 0,
+          x: 130,
+          y: 130,
+          strokeColor: '#1971c2',
+          backgroundColor: 'transparent',
+          width: 160,
+          height: 30,
+          seed: 1,
+          groupIds: [],
+          roundness: null,
+          boundElements: [],
+          updated: 1,
+          link: null,
+          locked: false,
+          text: 'Pizarra de Mochi',
+          fontSize: 20,
+          fontFamily: 1,
+          textAlign: 'center',
+          verticalAlign: 'middle',
+          baseline: 18,
+          containerId: null,
+          originalText: 'Pizarra de Mochi',
+        },
+      ],
+      appState: { viewBackgroundColor: '#ffffff', gridSize: null },
+      files: {},
+    });
+    return new Blob([demoScene], { type: 'application/json' });
+  }
   // Las imágenes de prueba son una foto dibujada en el momento (como una foto real del celu).
   if (f && /.(jpe?g|png)$/i.test(f.name)) {
     const c = new OffscreenCanvas(1600, 1200);

@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@excalidraw/excalidraw": "^0.18.1",
     "lucide-react": "^1.57.0",
     "mammoth": "^1.13.0",
     "pdfjs-dist": "^6.4.299",

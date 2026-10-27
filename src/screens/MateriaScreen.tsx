@@ -24,7 +24,7 @@ import ShareModal from '../components/ShareModal';
 import UploadSheet from '../components/UploadSheet';
 import { Button, ConfirmModal, IconButton, Menu, Modal, PromptModal, errorText, useToast, type MenuItem } from '../components/ui';
 import { CHANGED, notifyChanged, useFacu } from '../lib/context';
-import { list, move, trash } from '../lib/drive';
+import { createExcalidrawFile, list, move, trash } from '../lib/drive';
 import {
   addFolder,
   folderPath,
@@ -80,6 +80,7 @@ type ModalKind =
   | 'unwrap-folder'
   | 'delete-folder'
   | 'new-folder'
+  | 'new-drawing'
   | 'info'
   | 'add'
   | 'share';
@@ -449,6 +450,7 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
       items: [
         ...(canUndo() ? [{ label: 'Deshacer', icon: <Undo2 size={16} />, shortcut: 'Ctrl+Z', onClick: doUndo }, 'sep' as const] : []),
         { label: 'Nueva carpeta', icon: <FolderPlus size={16} />, shortcut: 'Ctrl+Shift+N', onClick: newFolderInline },
+        { label: 'Nueva pizarra', icon: <Pencil width={16} height={16} />, onClick: () => setModal('new-drawing') },
         { label: clip ? `Pegar ${plural(clip.items.length)}` : 'Pegar', icon: <ClipboardPaste size={16} />, shortcut: 'Ctrl+V', disabled: !clip, onClick: () => doPaste() },
         'sep',
         { label: 'Subir archivos', icon: <UploadIcon width={16} height={16} />, onClick: () => fileInput.current?.click() },
@@ -877,6 +879,9 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
             <Button variant="primary" onClick={() => fileInput.current?.click()}>
               <UploadIcon /> Subir archivos
             </Button>
+            <Button onClick={() => setModal('new-drawing')} title="Nueva pizarra">
+              <Pencil /> <span className="hidden xl:inline">Nueva pizarra</span>
+            </Button>
             <Button onClick={() => folderInput.current?.click()} title="Subir carpeta">
               <FolderIcon /> <span className="hidden xl:inline">Subir carpeta</span>
             </Button>
@@ -925,6 +930,7 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
       {modal === 'add' && (
         <Modal title={`Agregar a ${destName}`} onClose={() => setModal(null)}>
           <div className="grid gap-2">
+            <SheetAction icon={<Pencil />} label="Nueva pizarra" hint="Dibujar diagrama con Excalidraw" onClick={() => setModal('new-drawing')} />
             <SheetAction icon={<UploadIcon />} label="Subir archivos" hint="PDF, Word, fotos…" onClick={() => (setModal(null), fileInput.current?.click())} />
             <SheetAction icon={<Camera />} label="Sacar una foto" hint="Del pizarrón o de tus apuntes" onClick={() => (setModal(null), cameraInput.current?.click())} />
             <SheetAction icon={<FolderIcon />} label="Subir una carpeta entera" onClick={() => (setModal(null), folderInput.current?.click())} />
@@ -1071,6 +1077,34 @@ export default function MateriaScreen({ id, folderId }: { id: string; folderId?:
             const f = await addFolder(name, destId);
             await reload();
             go(`/m/${m.id}/${f.id}`);
+          }}
+        />
+      )}
+      {modal === 'new-drawing' && (
+        <PromptModal
+          title={current ? `Nueva pizarra en ${current.name}` : `Nueva pizarra en ${m.name}`}
+          initial={`Pizarra ${new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })}`}
+          placeholder="Nombre de la pizarra…"
+          action="Crear y dibujar"
+          onClose={() => setModal(null)}
+          onSubmit={async (name) => {
+            const emptyScene = JSON.stringify({
+              type: 'excalidraw',
+              version: 2,
+              source: 'https://mochi-facu.vercel.app',
+              elements: [],
+              appState: { viewBackgroundColor: '#ffffff', gridSize: null },
+              files: {},
+            });
+            const blob = new Blob([emptyScene], { type: 'application/vnd.excalidraw+json' });
+            try {
+              toast('Creando pizarra…');
+              const newFile = await createExcalidrawFile(name.trim() || 'Pizarra', destId, blob);
+              await reload();
+              openFile(newFile.id);
+            } catch (err) {
+              toast(errorText(err));
+            }
           }}
         />
       )}

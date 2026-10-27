@@ -16,6 +16,7 @@ const PdfView = lazy(() => import('../viewers/PdfView'));
 const DocxView = lazy(() => import('../viewers/DocxView'));
 const SheetView = lazy(() => import('../viewers/SheetView'));
 const ImageView = lazy(() => import('../viewers/ImageView'));
+const ExcalidrawView = lazy(() => import('../viewers/ExcalidrawView'));
 
 export default function Viewer({ id }: { id: string }) {
   const { tree } = useFacu();
@@ -160,27 +161,6 @@ export default function Viewer({ id }: { id: string }) {
   let body;
   if (error) body = <Center>{error}</Center>;
   else if (!file) body = <Center><Spinner /></Center>;
-  else if (kind === 'excalidraw')
-    body = (
-      <Center>
-        <FileBadge file={file} size="lg" />
-        <p className="font-bold text-lg mt-4">{baseName(file.name)}</p>
-        <p className="text-muted mt-1 max-w-sm">
-          Los dibujos se abren en Excalidraw. Se descarga el archivo y en Excalidraw lo abrís desde el menú, con <b>Abrir</b>.
-        </p>
-        <div className="flex flex-wrap justify-center gap-2 mt-5">
-          <Button variant="primary" onClick={openInExcalidraw}>
-            <External /> Abrir en Excalidraw
-          </Button>
-          <Button onClick={onDownload}>
-            <Download /> Solo descargar
-          </Button>
-        </div>
-        <p className="text-sm text-muted mt-6 max-w-sm">
-          Si lo cambiás en Excalidraw, guardalo y volvé a subirlo a esta carpeta para tener la versión nueva acá.
-        </p>
-      </Center>
-    );
   else if (!previewable)
     body = (
       <Center>
@@ -206,6 +186,7 @@ export default function Viewer({ id }: { id: string }) {
         {kind === 'word' && <DocxView blob={blob} />}
         {kind === 'excel' && <SheetView blob={blob} />}
         {kind === 'image' && <ImageView blob={blob} name={file.name} thumbnail={file.thumbnailLink} onOpenDrive={openInDrive} />}
+        {kind === 'excalidraw' && <ExcalidrawView blob={blob} file={file} />}
       </Suspense>
       </ErrorBoundary>
     );
@@ -248,6 +229,7 @@ export default function Viewer({ id }: { id: string }) {
             )}
             <Menu
               items={[
+                ...(kind === 'excalidraw' ? [{ label: 'Abrir en excalidraw.com', icon: <External />, onClick: openInExcalidraw }] : []),
                 ...(canSendToApp() ? [{ label: 'Descargar', icon: <Download />, onClick: onDownload }] : []),
                 {
                   label: isOffline ? 'Quitar de sin conexión' : 'Guardar sin conexión',
@@ -264,7 +246,11 @@ export default function Viewer({ id }: { id: string }) {
         )}
       </header>
 
-      <div className="flex-1 min-h-0 overflow-auto relative fade-in bg-sunken" data-scroll {...swipe}>
+      <div
+        className="flex-1 min-h-0 overflow-auto relative fade-in bg-sunken flex flex-col"
+        data-scroll
+        {...(kind === 'excalidraw' ? {} : swipe)}
+      >
         {body}
       </div>
       {/* Celu: aviso de que se puede deslizar */}

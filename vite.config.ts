@@ -42,6 +42,9 @@ function apiDev(): Plugin {
 export default defineConfig(({ mode }) => {
   Object.assign(process.env, loadEnv(mode, process.cwd(), ''));
   return {
+    define: {
+      'process.env.IS_PREACT': JSON.stringify('true'),
+    },
     plugins: [
       react(),
       tailwindcss(),
@@ -71,7 +74,7 @@ export default defineConfig(({ mode }) => {
             'index.html',
             'assets/index-*.{js,css}',
             'assets/rolldown-runtime-*.js',
-            'assets/{PdfView,SheetView,DocxView,ImageView}-*.js',
+            'assets/{PdfView,SheetView,DocxView,ImageView,ExcalidrawView}-*.js',
             // Las librerías que usan los visores (PDF, Word y Excel), para que también abran sin internet.
             'assets/{pdf,mammoth.browser,xlsx}-*.js',
             'assets/pdf.worker*.{mjs,js}',

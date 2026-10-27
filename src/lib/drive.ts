@@ -166,8 +166,15 @@ export async function download(id: string) {
 }
 
 export async function saveContent(id: string, content: Blob) {
+  if (DEMO) return (await import('./demo')).demoSaveContent(id, content);
   const r = await req(`${UPLOAD}/files/${id}?uploadType=media&fields=${FIELDS}`, { method: 'PATCH', body: content });
   return remember((await r.json()) as DFile);
+}
+
+export async function createExcalidrawFile(name: string, parent: string, content: Blob): Promise<DFile> {
+  const fileName = name.endsWith('.excalidraw') ? name : `${name}.excalidraw`;
+  if (DEMO) return (await import('./demo')).demoCreateFile(fileName, parent, content, 'application/json');
+  return upload(new File([content], fileName, { type: 'application/vnd.excalidraw+json' }), parent);
 }
 
 export async function createTextFile(
