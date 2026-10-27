@@ -137,7 +137,7 @@ export async function googleCallback(url: URL, state: string) {
     redirect_uri: `${url.origin}/api/callback`,
     grant_type: 'authorization_code',
   });
-  if (!ok || !data.refresh_token || !String(data.scope).includes('drive.file')) {
+  if (!ok || !data.refresh_token || !String(data.scope).includes('drive')) {
     back.searchParams.set('error', 'access_denied');
     back.searchParams.set('error_description', 'Hay que aceptar el permiso de Google Drive.');
     return Response.redirect(back.toString(), 302);

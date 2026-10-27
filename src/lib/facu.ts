@@ -66,13 +66,70 @@ const byName = <T extends { name: string }>(a: T, b: T) => a.name.localeCompare(
 
 export async function loadTree(): Promise<Tree> {
   const all = await list(`mimeType='${FOLDER}' and trashed=false`);
-  const root = all.find((f) => f.appProperties?.facu === 'root') ?? (await createFolder('Facultad', undefined, { facu: 'root' }));
+
+  // 1. Identificar la carpeta 'Facultad'
+  let root = all.find((f) => f.appProperties?.facu === 'root');
+  const facuCandidates = all.filter((f) => f.name.trim().toLowerCase() === 'facultad');
+  if (facuCandidates.length > 0) {
+    const withChildren = facuCandidates
+      .map((c) => ({
+        folder: c,
+        childrenCount: all.filter((f) => f.parents?.includes(c.id)).length,
+      }))
+      .sort((a, b) => b.childrenCount - a.childrenCount)[0];
+
+    const currentRootChildren = root ? all.filter((f) => f.parents?.includes(root!.id)).length : 0;
+    if (!root || withChildren.childrenCount > currentRootChildren) {
+      root = withChildren.folder;
+    }
+  }
+
+  if (!root) {
+    root = await createFolder('Facultad', undefined, { facu: 'root' });
+  } else if (root.appProperties?.facu !== 'root') {
+    root.appProperties = { ...root.appProperties, facu: 'root' };
+    try {
+      await update(root.id, { appProperties: { facu: 'root' } });
+    } catch {}
+  }
+
+  // 2. Reconocer y adoptar carpetas de Año adentro de root si no tienen appProperties
+  for (const f of all) {
+    if (f.parents?.includes(root.id)) {
+      const idx = YEAR_NAMES.findIndex((y) => y.toLowerCase() === f.name.trim().toLowerCase());
+      const match = f.name.match(/^([1-7])(?:er|do|er|to|mo)?\s*año/i);
+      const order = idx !== -1 ? idx + 1 : match ? Number(match[1]) : 0;
+      if (order > 0 && f.appProperties?.facu !== 'year') {
+        f.appProperties = { ...f.appProperties, facu: 'year', order: String(order) };
+        try {
+          await update(f.id, { appProperties: f.appProperties });
+        } catch {}
+      }
+    }
+  }
 
   const years: Year[] = all
     .filter((f) => f.appProperties?.facu === 'year' && f.parents?.includes(root.id))
     .map((f) => ({ id: f.id, name: f.name, order: Number(f.appProperties?.order ?? 0), materias: [] }))
     .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, 'es'));
   const yearById = new Map(years.map((y) => [y.id, y]));
+
+  // 3. Reconocer y adoptar Materias adentro de los Años si no tienen appProperties
+  let colorIdx = 0;
+  for (const f of all) {
+    const parentId = f.parents?.[0];
+    if (parentId && yearById.has(parentId) && f.appProperties?.facu !== 'materia') {
+      f.appProperties = {
+        ...f.appProperties,
+        facu: 'materia',
+        color: f.appProperties?.color ?? COLORS[colorIdx++ % COLORS.length],
+        estado: f.appProperties?.estado ?? 'cursando',
+      };
+      try {
+        await update(f.id, { appProperties: f.appProperties });
+      } catch {}
+    }
+  }
 
   const materias = new Map<string, Materia>();
   for (const f of all) {

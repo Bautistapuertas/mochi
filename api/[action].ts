@@ -76,7 +76,7 @@ export async function GET(req: Request) {
       console.error('Missing refresh_token:', data);
       return respond(302, null, [clearState], '/?error=reintentar&detail=no_refresh_token');
     }
-    if (!String(data.scope).includes('drive.file')) return respond(302, null, [clearState], '/?error=falta_drive');
+    if (!String(data.scope).includes('drive')) return respond(302, null, [clearState], '/?error=falta_drive');
 
     const claims = JSON.parse(Buffer.from(String(data.id_token).split('.')[1], 'base64url').toString());
     const session = await seal({

@@ -1,6 +1,6 @@
 // Partes comunes del servidor: variables, cifrado de sesiones, cookies, respuestas y tokens de Google.
 
-export const SCOPES = 'openid email profile https://www.googleapis.com/auth/drive.file';
+export const SCOPES = 'openid email profile https://www.googleapis.com/auth/drive';
 export const SESSION = 'facu_session';
 export const STATE = 'facu_state';
 export const MAX_AGE = 400 * 24 * 60 * 60;

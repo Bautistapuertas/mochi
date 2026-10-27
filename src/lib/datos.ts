@@ -2,7 +2,7 @@
 // Así se ven igual en la compu y en el celu.
 
 import type { PlanMark } from './plan';
-import { DEMO, createTextFile, download, list, saveContent } from './drive';
+import { DEMO, createTextFile, download, list, saveContent, update } from './drive';
 import { getList, isNetworkError, putList } from './offline';
 
 export type Exam = { id: string; materiaId: string; title: string; date: string /* AAAA-MM-DD */ };
@@ -38,7 +38,14 @@ function demoSample(): Datos {
 
 async function read(rootId: string): Promise<Datos> {
   if (DEMO) return (demoDatos ??= demoSample());
-  const f = (await list(`'${rootId}' in parents and appProperties has { key='facu' and value='datos' } and trashed=false`))[0];
+  let f = (await list(`'${rootId}' in parents and appProperties has { key='facu' and value='datos' } and trashed=false`))[0];
+  if (!f) {
+    const candidates = await list(`'${rootId}' in parents and name = 'Mochi - fechas.json' and trashed=false`);
+    f = candidates[0];
+    if (f && f.appProperties?.facu !== 'datos') {
+      try { await update(f.id, { appProperties: { facu: 'datos' } }); } catch {}
+    }
+  }
   if (!f) return empty();
   fileId = f.id;
   let text: string;
