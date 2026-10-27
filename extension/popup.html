@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Guardar en Mochi</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo-group">
+        <div class="logo-icon">🎒</div>
+        <div>
+          <h1 class="logo-title">Mochi</h1>
+          <span class="logo-sub">Guardar apunte</span>
+        </div>
+      </div>
+      <button id="btnSettings" class="icon-btn" title="Configurar URL de Mochi">⚙️</button>
+    </header>
+
+    <!-- Settings Panel (oculto por defecto) -->
+    <div id="settingsPanel" class="panel settings-panel hidden">
+      <label class="field-label" for="txtMochiUrl">Dirección web de tu Mochi:</label>
+      <input type="text" id="txtMochiUrl" class="input-text" placeholder="https://tu-mochi.vercel.app">
+      <button id="btnSaveSettings" class="btn btn-secondary mt-2">Guardar dirección</button>
+    </div>
+
+    <!-- Login Warning -->
+    <div id="loginWarning" class="alert-box alert-warning hidden">
+      <p class="font-bold">Sesión no detectada</p>
+      <p class="text-sm mt-1">Iniciá sesión en tu Mochi para poder guardar archivos.</p>
+      <button id="btnOpenMochi" class="btn btn-primary mt-2">Abrir Mochi para entrar</button>
+    </div>
+
+    <!-- Main Content Form -->
+    <main id="mainForm" class="content">
+      <!-- Target Detected Banner -->
+      <div id="detectedBanner" class="detected-card hidden">
+        <div class="detected-icon" id="detectedIcon">🎨</div>
+        <div class="detected-info">
+          <span class="detected-badge" id="detectedBadge">Excalidraw</span>
+          <p class="detected-desc" id="detectedDesc">Pizarra detectada lista para guardar</p>
+        </div>
+      </div>
+
+      <!-- File Name -->
+      <div class="field-group">
+        <label class="field-label" for="txtFileName">Nombre del archivo:</label>
+        <input type="text" id="txtFileName" class="input-text" placeholder="Apunte de hoy">
+      </div>
+
+      <!-- Format selector (si es Excalidraw) -->
+      <div id="formatGroup" class="field-group hidden">
+        <label class="field-label">Formato a guardar:</label>
+        <div class="format-options">
+          <label class="radio-label">
+            <input type="radio" name="format" value="excalidraw" checked>
+            <span><b>.excalidraw</b> (Pizarra editable)</span>
+          </label>
+          <label class="radio-label">
+            <input type="radio" name="format" value="png">
+            <span><b>.png</b> (Imagen renderizada)</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Materia Selector -->
+      <div class="field-group">
+        <label class="field-label" for="selMateria">Guardar en la materia:</label>
+        <select id="selMateria" class="select-box">
+          <option value="" disabled selected>Cargando materias...</option>
+        </select>
+      </div>
+
+      <!-- Subcarpeta Selector -->
+      <div id="folderGroup" class="field-group hidden">
+        <label class="field-label" for="selFolder">Subcarpeta (opcional):</label>
+        <select id="selFolder" class="select-box">
+          <option value="">Carpeta principal de la materia</option>
+        </select>
+      </div>
+
+      <!-- Dropzone for custom files -->
+      <div id="dropzone" class="dropzone">
+        <span class="dropzone-text">O arrastrá un archivo aquí para subirlo</span>
+        <input type="file" id="fileInput" class="hidden">
+      </div>
+
+      <!-- Status feedback -->
+      <div id="statusBox" class="status-box hidden"></div>
+
+      <!-- Submit Button -->
+      <button id="btnSave" class="btn btn-primary btn-block">
+        <span id="btnSaveText">Guardar en Mochi</span>
+      </button>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <span id="userAccountText" class="user-text">Conectando...</span>
+      <a href="#" id="linkViewMochi" class="link-app">Ver en Mochi ↗</a>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
